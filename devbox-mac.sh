@@ -24,7 +24,7 @@ OFFICIAL_NPM_MIRROR="https://registry.npmjs.org"
 #===========================================
 # 工具函数
 #===========================================
-GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; GRAY='\033[0;37m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; GRAY='\033[0;90m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 info() { printf "${GREEN}✓${NC} %s\n" "$1"; }
 fail() { printf "${RED}✗${NC} %s\n" "$1"; }
 warn() { printf "${YELLOW}!${NC} %s\n" "$1"; }
@@ -41,7 +41,7 @@ section() {
 show_header() {
     local subtitle="$1"
     echo ""
-    printf "${BOLD}devbox${NC} ${VERSION}\n"
+    printf "${BOLD}Devbox${NC} ${VERSION}\n"
     printf "${GRAY}${PROJECT_URL}${NC}\n"
     echo "────────────────────────────────────────"
     printf "${CYAN}${subtitle}${NC}\n"
@@ -68,7 +68,7 @@ append_if_missing() {
 #===========================================
 show_help() {
     cat << EOF
-devbox ${VERSION}
+Devbox ${VERSION}
 Mac 开发环境初始化脚本 | ${PROJECT_URL}
 
 用法: ./devbox-mac.sh <命令> [选项]
@@ -101,7 +101,7 @@ EOF
 }
 
 show_version() {
-    echo "devbox ${VERSION}"
+    echo "Devbox ${VERSION}"
     exit 0
 }
 
@@ -119,7 +119,8 @@ cmd_status() {
 
     section "基础工具"
     if has brew; then
-        info "Homebrew $(brew --version | head -1 | awk '{print $2}')"
+        local brew_ver=$(brew --version 2>/dev/null | head -1 | awk '{print $2}' || echo "unknown")
+        info "Homebrew ${brew_ver}"
         dim "    ├─ 路径: $(which brew)"
         if [[ -n "$HOMEBREW_BOTTLE_DOMAIN" ]]; then
             dim "    └─ 镜像: $HOMEBREW_BOTTLE_DOMAIN"
@@ -224,7 +225,8 @@ install_homebrew() {
     step "安装 Homebrew"
     
     if has brew; then
-        info "Homebrew 已安装 ($(brew --version | head -1))"
+        local brew_ver=$(brew --version 2>/dev/null | head -1 || echo "unknown")
+        info "Homebrew 已安装 (${brew_ver})"
         return 0
     fi
     
@@ -384,11 +386,12 @@ cmd_install() {
     echo "────────────────────────────────────────"
     printf "${GREEN}安装完成${NC}\n"
     echo ""
-    echo "  Homebrew  $(brew --version | head -1 | awk '{print $2}')"
-    $INSTALL_PYTHON && echo "  Python    $(python3 --version | awk '{print $2}')"
-    $INSTALL_NODEJS && echo "  Node.js   $(node --version)"
-    $INSTALL_GO && echo "  Go        $(go version | awk '{print $3}')"
-    $INSTALL_RUST && echo "  Rust      $(rustc --version | awk '{print $2}')"
+    local brew_ver=$(brew --version 2>/dev/null | head -1 | awk '{print $2}' || echo "")
+    echo "  Homebrew  ${brew_ver}"
+    $INSTALL_PYTHON && echo "  Python    $(python3 --version 2>/dev/null | awk '{print $2}')"
+    $INSTALL_NODEJS && echo "  Node.js   $(node --version 2>/dev/null)"
+    $INSTALL_GO && echo "  Go        $(go version 2>/dev/null | awk '{print $3}')"
+    $INSTALL_RUST && echo "  Rust      $(rustc --version 2>/dev/null | awk '{print $2}')"
     echo ""
     warn "运行 source $(get_shell_rc) 或重开终端生效"
 }

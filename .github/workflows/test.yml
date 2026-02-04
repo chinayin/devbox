@@ -19,7 +19,7 @@ jobs:
 
       - name: Verify installations
         run: |
-          source ~/.zshrc || true
+          eval "$(/opt/homebrew/bin/brew shellenv)" || eval "$(/usr/local/bin/brew shellenv)" || true
           brew --version
           python3 --version
           node --version
@@ -44,10 +44,14 @@ jobs:
           grep -q "tuna.tsinghua.edu.cn" ~/.pip/pip.conf
 
           echo "==> Checking npm config"
+          eval "$(/opt/homebrew/bin/brew shellenv)" || eval "$(/usr/local/bin/brew shellenv)" || true
           npm config get registry | grep -q "npmmirror.com"
 
           echo "==> Checking shell rc for Homebrew mirror"
-          grep -q "HOMEBREW_BOTTLE_DOMAIN" ~/.zshrc
+          RC_FILE="${HOME}/.zshrc"
+          [[ ! -f "$RC_FILE" ]] && RC_FILE="${HOME}/.bash_profile"
+          [[ ! -f "$RC_FILE" ]] && RC_FILE="${HOME}/.profile"
+          grep -q "HOMEBREW_BOTTLE_DOMAIN" "$RC_FILE"
 
       - name: Check status
         run: ./devbox-mac.sh status
@@ -63,8 +67,8 @@ jobs:
 
       - name: Verify installations
         run: |
-          source ~/.zshrc || true
-          source ~/.cargo/env || true
+          eval "$(/opt/homebrew/bin/brew shellenv)" || eval "$(/usr/local/bin/brew shellenv)" || true
+          [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
           go version
           rustc --version
           cargo --version
