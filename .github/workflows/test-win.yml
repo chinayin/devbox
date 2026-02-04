@@ -21,10 +21,10 @@ jobs:
       - name: Verify installations
         shell: pwsh
         run: |
-          Write-Host "Scoop: $(scoop --version 2>$null | Select-Object -First 1)"
-          Write-Host "Python: $(python --version 2>&1)"
-          Write-Host "Node: $(node --version)"
-          Write-Host "npm: $(npm --version)"
+          Write-Host "Scoop $(scoop --version 2>$null | Select-Object -First 1)"
+          Write-Host "$(python --version 2>&1)"
+          Write-Host "Node.js $(node --version)"
+          Write-Host "npm $(npm --version)"
 
       - name: Check status
         shell: pwsh
@@ -74,9 +74,9 @@ jobs:
       - name: Verify installations
         shell: pwsh
         run: |
-          Write-Host "Go: $(go version)"
-          Write-Host "Rust: $(rustc --version)"
-          Write-Host "Cargo: $(cargo --version)"
+          Write-Host "$(go version)"
+          Write-Host "$(rustc --version)"
+          Write-Host "$(cargo --version)"
 
       - name: Final status
         shell: pwsh

@@ -79,7 +79,11 @@ function Write-Header {
 
 function Test-Command {
     param([string]$Name)
-    return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+    $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $cmd) { return $false }
+    # 排除 Windows App Alias (假命令)
+    if ($cmd.Source -match 'WindowsApps') { return $false }
+    return $true
 }
 
 function Get-ProfilePath {
@@ -293,19 +297,23 @@ function Install-Python {
         Write-Info "Python 已安装 ($pyVer)"
     } else {
         scoop install $pkg
+        # 刷新环境变量
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
         Write-Info "Python 安装完成 ($(python --version 2>&1))"
     }
     
     Write-Step "配置 pip 镜像"
     $pipDir = "$env:APPDATA\pip"
     if (-not (Test-Path $pipDir)) { New-Item -ItemType Directory -Path $pipDir -Force | Out-Null }
-    $pipHost = ([uri]$script:PIP_MIRROR).Host
+    $mirror = $script:PIP_MIRROR
+    if (-not $mirror) { $mirror = "https://pypi.org/simple" }
+    $pipHost = ([uri]$mirror).Host
     @"
 [global]
-index-url = $script:PIP_MIRROR
+index-url = $mirror
 trusted-host = $pipHost
 "@ | Set-Content "$pipDir\pip.ini"
-    Write-Info "pip → $script:PIP_MIRROR"
+    Write-Info "pip → $mirror"
 }
 
 function Install-NodeJS {
@@ -319,12 +327,16 @@ function Install-NodeJS {
         Write-Info "Node.js 已安装 ($nodeVer)"
     } else {
         scoop install $pkg
+        # 刷新环境变量
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
         Write-Info "Node.js 安装完成 ($(node --version))"
     }
     
     Write-Step "配置 npm 镜像"
-    npm config set registry $script:NPM_MIRROR
-    Write-Info "npm → $script:NPM_MIRROR"
+    $mirror = $script:NPM_MIRROR
+    if (-not $mirror) { $mirror = "https://registry.npmjs.org" }
+    npm config set registry $mirror
+    Write-Info "npm → $mirror"
 }
 
 function Install-Go {
@@ -337,26 +349,31 @@ function Install-Go {
         Write-Info "Go 已安装 ($goVer)"
     } else {
         scoop install $pkg
+        # 刷新环境变量
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
         Write-Info "Go 安装完成 ($(go version))"
     }
     
-    if ($script:GO_PROXY) {
+    $proxy = $script:GO_PROXY
+    if ($proxy) {
         Write-Step "配置 Go 镜像"
-        go env -w GOPROXY="$script:GO_PROXY"
-        Write-Info "GOPROXY → $script:GO_PROXY"
+        go env -w GOPROXY="$proxy"
+        Write-Info "GOPROXY → $proxy"
     }
 }
 
 function Install-Rust {
     Write-Step "安装 Rust"
     
+    $mirror = $script:RUST_MIRROR
+    
     if (Test-Command rustc) {
         $rustVer = rustc --version
         Write-Info "Rust 已安装 ($rustVer)"
     } else {
-        if ($script:RUST_MIRROR) {
-            $env:RUSTUP_DIST_SERVER = $script:RUST_MIRROR
-            $env:RUSTUP_UPDATE_ROOT = "$script:RUST_MIRROR/rustup"
+        if ($mirror) {
+            $env:RUSTUP_DIST_SERVER = $mirror
+            $env:RUSTUP_UPDATE_ROOT = "$mirror/rustup"
         }
         
         # 下载并运行 rustup-init
@@ -371,7 +388,7 @@ function Install-Rust {
         Write-Info "Rust 安装完成 ($(rustc --version))"
     }
     
-    if ($script:RUST_MIRROR) {
+    if ($mirror) {
         Write-Step "配置 Rust 镜像"
         $cargoConfig = "$env:USERPROFILE\.cargo\config"
         @"
@@ -379,9 +396,9 @@ function Install-Rust {
 replace-with = 'rsproxy'
 
 [source.rsproxy]
-registry = "$script:RUST_MIRROR/crates.io-index"
+registry = "$mirror/crates.io-index"
 "@ | Set-Content $cargoConfig
-        Write-Info "Cargo → $script:RUST_MIRROR"
+        Write-Info "Cargo → $mirror"
     }
 }
 
