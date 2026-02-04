@@ -9,7 +9,7 @@ on:
 
 jobs:
   test-install-official:
-    name: Install (Official Sources)
+    name: Install
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -29,10 +29,15 @@ jobs:
         run: ./devbox-mac.sh status
 
   test-install-china-config:
-    name: Install China (Config Only)
+    name: Install China (Full Test)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Uninstall Homebrew
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)" -- --force
+          sudo rm -rf /opt/homebrew /usr/local/Homebrew /usr/local/Cellar /usr/local/bin/brew
 
       - name: Install with --china flag
         run: ./devbox-mac.sh install --china --vibecoding

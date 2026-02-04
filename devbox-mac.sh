@@ -33,7 +33,7 @@ OFFICIAL_BREW_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/insta
 #===========================================
 # 工具函数
 #===========================================
-GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; GRAY='\033[0;37m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; GRAY='\033[0;90m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 info() { printf "${GREEN}✓${NC} %s\n" "$1"; }
 fail() { printf "${RED}✗${NC} %s\n" "$1"; }
 warn() { printf "${YELLOW}!${NC} %s\n" "$1"; }
@@ -50,7 +50,7 @@ section() {
 show_header() {
     local subtitle="$1"
     echo ""
-    printf "${BOLD}devbox${NC} ${VERSION}\n"
+    printf "${BOLD}Devbox${NC} ${VERSION}\n"
     printf "${GRAY}${PROJECT_URL}${NC}\n"
     echo "────────────────────────────────────────"
     printf "${CYAN}${subtitle}${NC}\n"
@@ -93,7 +93,7 @@ setup_china_mirror() {
 #===========================================
 show_help() {
     cat << EOF
-devbox ${VERSION}
+Devbox ${VERSION}
 Mac 开发环境初始化脚本 | ${PROJECT_URL}
 
 用法: ./devbox-mac.sh <命令> [选项]
@@ -126,7 +126,7 @@ EOF
 }
 
 show_version() {
-    echo "devbox ${VERSION}"
+    echo "Devbox ${VERSION}"
     exit 0
 }
 
