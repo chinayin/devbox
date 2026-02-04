@@ -242,10 +242,10 @@ install_homebrew() {
     fi
     
     if $USE_CHINA_MIRROR; then
-        export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/brew.git"
-        export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/homebrew-core.git"
+        export HOMEBREW_BREW_GIT_REMOTE="${CN_BREW_MIRROR}/git/homebrew/brew.git"
+        export HOMEBREW_CORE_GIT_REMOTE="${CN_BREW_MIRROR}/git/homebrew/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
-        /bin/bash -c "$(curl -fsSL ${BREW_MIRROR}/git/homebrew/install/HEAD/install.sh)"
+        /bin/bash -c "$(curl -fsSL ${CN_BREW_MIRROR}/git/homebrew/install/HEAD/install.sh)"
     else
         /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
     fi
@@ -269,12 +269,10 @@ config_homebrew_mirror() {
     local rc=$(get_shell_rc)
     local config="
 # Homebrew 镜像
-export HOMEBREW_API_DOMAIN=\"${BREW_MIRROR}/homebrew-bottles/api\"
-export HOMEBREW_BOTTLE_DOMAIN=\"${BREW_MIRROR}/homebrew-bottles\""
+export HOMEBREW_API_DOMAIN=\"${CN_BREW_MIRROR}/homebrew-bottles/api\"
+export HOMEBREW_BOTTLE_DOMAIN=\"${CN_BREW_MIRROR}/homebrew-bottles\""
     
     append_if_missing "$rc" "$config" "HOMEBREW_BOTTLE_DOMAIN"
-    export HOMEBREW_API_DOMAIN="${BREW_MIRROR}/homebrew-bottles/api"
-    export HOMEBREW_BOTTLE_DOMAIN="${BREW_MIRROR}/homebrew-bottles"
     info "Homebrew 镜像已配置"
 }
 
@@ -372,6 +370,12 @@ cmd_install() {
     
     show_header "install - 环境安装 [$REGION]"
     
+    # 如果使用中国镜像，先设置环境变量（确保后续所有 brew install 都生效）
+    if $USE_CHINA_MIRROR; then
+        export HOMEBREW_API_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles/api"
+        export HOMEBREW_BOTTLE_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles"
+    fi
+    
     install_homebrew
     config_homebrew_mirror
     
@@ -380,12 +384,6 @@ cmd_install() {
         info "Homebrew 安装完成 (--brew-only)"
         warn "运行 source $(get_shell_rc) 或重开终端生效"
         return 0
-    fi
-    
-    # 确保镜像配置在 brew install 前生效
-    if $USE_CHINA_MIRROR; then
-        export HOMEBREW_API_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles/api"
-        export HOMEBREW_BOTTLE_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles"
     fi
     
     $INSTALL_PYTHON && install_python
