@@ -1,0 +1,73 @@
+name: Test
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+jobs:
+  test-install-official:
+    name: Install (Official Sources)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install vibecoding
+        run: ./devbox-mac.sh install --vibecoding
+
+      - name: Verify installations
+        run: |
+          source ~/.zshrc || true
+          brew --version
+          python3 --version
+          node --version
+          npm --version
+
+      - name: Check status after install
+        run: ./devbox-mac.sh status
+
+  test-install-china-config:
+    name: Install China (Config Only)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install with --china flag
+        run: ./devbox-mac.sh install --china --vibecoding
+
+      - name: Verify mirror configs
+        run: |
+          echo "==> Checking pip config"
+          cat ~/.pip/pip.conf
+          grep -q "tuna.tsinghua.edu.cn" ~/.pip/pip.conf
+
+          echo "==> Checking npm config"
+          npm config get registry | grep -q "npmmirror.com"
+
+          echo "==> Checking shell rc for Homebrew mirror"
+          grep -q "HOMEBREW_BOTTLE_DOMAIN" ~/.zshrc
+
+      - name: Check status
+        run: ./devbox-mac.sh status
+
+  test-install-languages:
+    name: Install All Languages
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Go and Rust
+        run: ./devbox-mac.sh install --go --rust
+
+      - name: Verify installations
+        run: |
+          source ~/.zshrc || true
+          source ~/.cargo/env || true
+          go version
+          rustc --version
+          cargo --version
+
+      - name: Final status
+        run: ./devbox-mac.sh status
