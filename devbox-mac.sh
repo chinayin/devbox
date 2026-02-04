@@ -122,7 +122,12 @@ cmd_status() {
         local brew_ver=$(brew --version 2>/dev/null | head -1 | awk '{print $2}' || echo "unknown")
         info "Homebrew ${brew_ver}"
         dim "    ├─ 路径: $(which brew)"
-        if [[ -n "$HOMEBREW_BOTTLE_DOMAIN" ]]; then
+        # 从配置文件检测镜像
+        local rc=$(get_shell_rc)
+        local brew_mirror=$(grep "HOMEBREW_BOTTLE_DOMAIN" "$rc" 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' | tail -1)
+        if [[ -n "$brew_mirror" ]]; then
+            dim "    └─ 镜像: $brew_mirror"
+        elif [[ -n "$HOMEBREW_BOTTLE_DOMAIN" ]]; then
             dim "    └─ 镜像: $HOMEBREW_BOTTLE_DOMAIN"
         else
             dim "    └─ 镜像: 官方源"
@@ -375,6 +380,12 @@ cmd_install() {
         info "Homebrew 安装完成 (--brew-only)"
         warn "运行 source $(get_shell_rc) 或重开终端生效"
         return 0
+    fi
+    
+    # 确保镜像配置在 brew install 前生效
+    if $USE_CHINA_MIRROR; then
+        export HOMEBREW_API_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles/api"
+        export HOMEBREW_BOTTLE_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles"
     fi
     
     $INSTALL_PYTHON && install_python
