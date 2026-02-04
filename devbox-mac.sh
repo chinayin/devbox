@@ -258,7 +258,9 @@ install_homebrew() {
         export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/brew.git"
         export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
-        /bin/bash -c "$(curl -fsSL ${BREW_MIRROR}/git/homebrew/install/HEAD/install.sh)"
+        git clone --depth=1 "${BREW_MIRROR}/git/homebrew/install.git" /tmp/brew-install
+        /bin/bash /tmp/brew-install/install.sh
+        rm -rf /tmp/brew-install
     else
         /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
     fi
