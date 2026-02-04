@@ -1,0 +1,83 @@
+name: Test Windows
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+jobs:
+  test-install-official:
+    name: Install
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install vibecoding
+        shell: pwsh
+        run: .\devbox-win.ps1 install -VibeCoding
+
+      - name: Verify installations
+        shell: pwsh
+        run: |
+          Write-Host "Scoop: $(scoop --version 2>$null | Select-Object -First 1)"
+          Write-Host "Python: $(python --version 2>&1)"
+          Write-Host "Node: $(node --version)"
+          Write-Host "npm: $(npm --version)"
+
+      - name: Check status
+        shell: pwsh
+        run: .\devbox-win.ps1 status
+
+  test-install-china:
+    name: Install China
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install with -China flag
+        shell: pwsh
+        run: .\devbox-win.ps1 install -China -VibeCoding
+
+      - name: Verify mirror configs
+        shell: pwsh
+        run: |
+          Write-Host "==> Checking pip config"
+          $pipConfig = "$env:APPDATA\pip\pip.ini"
+          Get-Content $pipConfig
+          if (-not (Select-String -Path $pipConfig -Pattern "tuna.tsinghua.edu.cn")) {
+            throw "pip mirror not configured"
+          }
+
+          Write-Host "==> Checking npm config"
+          $npmRegistry = npm config get registry
+          Write-Host "npm registry: $npmRegistry"
+          if ($npmRegistry -notmatch "npmmirror.com") {
+            throw "npm mirror not configured"
+          }
+
+      - name: Check status
+        shell: pwsh
+        run: .\devbox-win.ps1 status
+
+  test-install-languages:
+    name: Install All Languages
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Go and Rust
+        shell: pwsh
+        run: .\devbox-win.ps1 install -Go -Rust
+
+      - name: Verify installations
+        shell: pwsh
+        run: |
+          Write-Host "Go: $(go version)"
+          Write-Host "Rust: $(rustc --version)"
+          Write-Host "Cargo: $(cargo --version)"
+
+      - name: Final status
+        shell: pwsh
+        run: .\devbox-win.ps1 status

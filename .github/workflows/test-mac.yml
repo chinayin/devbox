@@ -1,4 +1,4 @@
-name: Test
+name: Test Mac
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
       - name: Check status after install
         run: ./devbox-mac.sh status
 
-  test-install-china-config:
+  test-install-china:
     name: Install China
     runs-on: macos-latest
     steps:
