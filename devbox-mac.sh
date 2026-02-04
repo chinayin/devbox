@@ -251,7 +251,8 @@ install_homebrew() {
     if ! xcode-select -p &>/dev/null; then
         warn "需要先安装 Xcode 命令行工具"
         xcode-select --install 2>/dev/null || true
-        read -p "安装完成后按回车继续..."
+        echo "请在弹出的窗口中点击「安装」，完成后按回车继续..."
+        read -p ""
     fi
     
     if [[ -n "$BREW_MIRROR" ]]; then
