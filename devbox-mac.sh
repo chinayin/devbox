@@ -11,20 +11,29 @@ VERSION="v0.1"
 PROJECT_URL="https://github.com/chinaiyn/devbox"
 
 #===========================================
-# 镜像源配置
+# 镜像源配置（默认官方源）
 #===========================================
+BREW_MIRROR=""
+BREW_BOTTLE_MIRROR=""
+PIP_MIRROR="https://pypi.org/simple"
+NPM_MIRROR="https://registry.npmjs.org"
+GO_PROXY=""
+RUST_MIRROR=""
+
+# 中国镜像源
 CN_BREW_MIRROR="https://mirrors.tuna.tsinghua.edu.cn"
+CN_BREW_BOTTLE="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
 CN_PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 CN_NPM_MIRROR="https://registry.npmmirror.com"
+CN_GO_PROXY="https://goproxy.cn,direct"
+CN_RUST_MIRROR="https://rsproxy.cn"
 
 OFFICIAL_BREW_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
-OFFICIAL_PIP_MIRROR="https://pypi.org/simple"
-OFFICIAL_NPM_MIRROR="https://registry.npmjs.org"
 
 #===========================================
 # 工具函数
 #===========================================
-GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; GRAY='\033[0;90m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; GRAY='\033[0;37m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 info() { printf "${GREEN}✓${NC} %s\n" "$1"; }
 fail() { printf "${RED}✗${NC} %s\n" "$1"; }
 warn() { printf "${YELLOW}!${NC} %s\n" "$1"; }
@@ -41,7 +50,7 @@ section() {
 show_header() {
     local subtitle="$1"
     echo ""
-    printf "${BOLD}Devbox${NC} ${VERSION}\n"
+    printf "${BOLD}devbox${NC} ${VERSION}\n"
     printf "${GRAY}${PROJECT_URL}${NC}\n"
     echo "────────────────────────────────────────"
     printf "${CYAN}${subtitle}${NC}\n"
@@ -64,11 +73,27 @@ append_if_missing() {
 }
 
 #===========================================
+# 镜像配置
+#===========================================
+setup_china_mirror() {
+    BREW_MIRROR="$CN_BREW_MIRROR"
+    BREW_BOTTLE_MIRROR="$CN_BREW_BOTTLE"
+    PIP_MIRROR="$CN_PIP_MIRROR"
+    NPM_MIRROR="$CN_NPM_MIRROR"
+    GO_PROXY="$CN_GO_PROXY"
+    RUST_MIRROR="$CN_RUST_MIRROR"
+    
+    # 立即设置 Homebrew 环境变量（当前 session 生效）
+    export HOMEBREW_API_DOMAIN="${BREW_BOTTLE_MIRROR}/api"
+    export HOMEBREW_BOTTLE_DOMAIN="${BREW_BOTTLE_MIRROR}"
+}
+
+#===========================================
 # 帮助信息
 #===========================================
 show_help() {
     cat << EOF
-Devbox ${VERSION}
+devbox ${VERSION}
 Mac 开发环境初始化脚本 | ${PROJECT_URL}
 
 用法: ./devbox-mac.sh <命令> [选项]
@@ -101,7 +126,7 @@ EOF
 }
 
 show_version() {
-    echo "Devbox ${VERSION}"
+    echo "devbox ${VERSION}"
     exit 0
 }
 
@@ -147,7 +172,7 @@ cmd_status() {
         info "Python $(python3 --version | awk '{print $2}')"
         dim "    ├─ 路径: $(which python3)"
         if [[ -f ~/.pip/pip.conf ]]; then
-            pip_mirror=$(grep "index-url" ~/.pip/pip.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+            local pip_mirror=$(grep "index-url" ~/.pip/pip.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
             dim "    └─ pip:  $pip_mirror"
         else
             dim "    └─ pip:  官方源"
@@ -160,7 +185,7 @@ cmd_status() {
         info "Node.js $(node --version)"
         dim "    ├─ 路径: $(which node)"
         if has npm; then
-            npm_mirror=$(npm config get registry 2>/dev/null)
+            local npm_mirror=$(npm config get registry 2>/dev/null)
             dim "    └─ npm:  $npm_mirror"
         fi
     else
@@ -212,18 +237,6 @@ parse_install_args() {
             --rust)          INSTALL_RUST=true ;;
         esac
     done
-
-    if $USE_CHINA_MIRROR; then
-        BREW_MIRROR="$CN_BREW_MIRROR"
-        PIP_MIRROR="$CN_PIP_MIRROR"
-        NPM_MIRROR="$CN_NPM_MIRROR"
-        REGION="中国镜像"
-    else
-        BREW_MIRROR=""
-        PIP_MIRROR="$OFFICIAL_PIP_MIRROR"
-        NPM_MIRROR="$OFFICIAL_NPM_MIRROR"
-        REGION="官方源"
-    fi
 }
 
 install_homebrew() {
@@ -241,11 +254,11 @@ install_homebrew() {
         read -p "安装完成后按回车继续..."
     fi
     
-    if $USE_CHINA_MIRROR; then
-        export HOMEBREW_BREW_GIT_REMOTE="${CN_BREW_MIRROR}/git/homebrew/brew.git"
-        export HOMEBREW_CORE_GIT_REMOTE="${CN_BREW_MIRROR}/git/homebrew/homebrew-core.git"
+    if [[ -n "$BREW_MIRROR" ]]; then
+        export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/brew.git"
+        export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
-        /bin/bash -c "$(curl -fsSL ${CN_BREW_MIRROR}/git/homebrew/install/HEAD/install.sh)"
+        /bin/bash -c "$(curl -fsSL ${BREW_MIRROR}/git/homebrew/install/HEAD/install.sh)"
     else
         /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
     fi
@@ -262,15 +275,15 @@ install_homebrew() {
     info "Homebrew 安装完成"
 }
 
-config_homebrew_mirror() {
-    $USE_CHINA_MIRROR || return 0
+save_homebrew_mirror() {
+    [[ -z "$BREW_BOTTLE_MIRROR" ]] && return 0
     
     step "配置 Homebrew 镜像"
     local rc=$(get_shell_rc)
     local config="
 # Homebrew 镜像
-export HOMEBREW_API_DOMAIN=\"${CN_BREW_MIRROR}/homebrew-bottles/api\"
-export HOMEBREW_BOTTLE_DOMAIN=\"${CN_BREW_MIRROR}/homebrew-bottles\""
+export HOMEBREW_API_DOMAIN=\"${BREW_BOTTLE_MIRROR}/api\"
+export HOMEBREW_BOTTLE_DOMAIN=\"${BREW_BOTTLE_MIRROR}\""
     
     append_if_missing "$rc" "$config" "HOMEBREW_BOTTLE_DOMAIN"
     info "Homebrew 镜像已配置"
@@ -329,10 +342,10 @@ install_go() {
         info "Go 安装完成 ($(go version))"
     fi
     
-    if $USE_CHINA_MIRROR; then
+    if [[ -n "$GO_PROXY" ]]; then
         step "配置 Go 镜像"
-        go env -w GOPROXY=https://goproxy.cn,direct
-        info "GOPROXY → https://goproxy.cn"
+        go env -w GOPROXY="$GO_PROXY"
+        info "GOPROXY → $GO_PROXY"
     fi
 }
 
@@ -342,42 +355,44 @@ install_rust() {
     if has rustc; then
         info "Rust 已安装 ($(rustc --version))"
     else
-        if $USE_CHINA_MIRROR; then
-            export RUSTUP_DIST_SERVER="https://rsproxy.cn"
-            export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup"
+        if [[ -n "$RUST_MIRROR" ]]; then
+            export RUSTUP_DIST_SERVER="$RUST_MIRROR"
+            export RUSTUP_UPDATE_ROOT="${RUST_MIRROR}/rustup"
         fi
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         source "$HOME/.cargo/env"
         info "Rust 安装完成 ($(rustc --version))"
     fi
     
-    if $USE_CHINA_MIRROR; then
+    if [[ -n "$RUST_MIRROR" ]]; then
         step "配置 Rust 镜像"
         mkdir -p ~/.cargo
-        cat > ~/.cargo/config << 'EOF'
+        cat > ~/.cargo/config << EOF
 [source.crates-io]
 replace-with = 'rsproxy'
 
 [source.rsproxy]
-registry = "https://rsproxy.cn/crates.io-index"
+registry = "${RUST_MIRROR}/crates.io-index"
 EOF
-        info "Cargo → rsproxy.cn"
+        info "Cargo → $RUST_MIRROR"
     fi
 }
 
 cmd_install() {
     parse_install_args "$@"
     
-    show_header "install - 环境安装 [$REGION]"
-    
-    # 如果使用中国镜像，先设置环境变量（确保后续所有 brew install 都生效）
+    # 设置镜像源
     if $USE_CHINA_MIRROR; then
-        export HOMEBREW_API_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles/api"
-        export HOMEBREW_BOTTLE_DOMAIN="${CN_BREW_MIRROR}/homebrew-bottles"
+        setup_china_mirror
+        local region="中国镜像"
+    else
+        local region="官方源"
     fi
     
+    show_header "install - 环境安装 [$region]"
+    
     install_homebrew
-    config_homebrew_mirror
+    save_homebrew_mirror
     
     if $BREW_ONLY; then
         echo ""

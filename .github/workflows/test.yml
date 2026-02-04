@@ -22,8 +22,8 @@ jobs:
           eval "$(/opt/homebrew/bin/brew shellenv)" || eval "$(/usr/local/bin/brew shellenv)" || true
           brew --version
           python3 --version
-          echo "Node: $(node --version 2>/dev/null)"
-          echo "npm: $(npm --version 2>/dev/null)"
+          echo "Node.js $(node --version 2>/dev/null)"
+          echo "npm $(npm --version 2>/dev/null)"
 
       - name: Check status after install
         run: ./devbox-mac.sh status
