@@ -282,33 +282,12 @@ function Install-Scoop {
     
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
     
-    # Debug info
-    Write-Dim "    IsAdmin: $($script:IsAdmin)"
-    Write-Dim "    SCOOP_MIRROR: $($script:SCOOP_MIRROR)"
-    
-    # Auto-detect admin and pass -RunAsAdmin to install script
+    # Always use official installer (mirror installer may be outdated)
     if ($script:IsAdmin) {
         Write-Info "Admin detected, installing globally"
-        if ($script:SCOOP_MIRROR) {
-            Write-Dim "    Using mirror with -RunAsAdmin"
-            $env:SCOOP_REPO = "$script:SCOOP_MIRROR/scoop"
-            $installUrl = "$script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1"
-            Write-Dim "    Install URL: $installUrl"
-            iex "& {$(irm $installUrl)} -RunAsAdmin"
-        } else {
-            Write-Dim "    Using official with -RunAsAdmin"
-            iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
-        }
+        iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
     } else {
-        Write-Info "User mode, installing to user directory"
-        if ($script:SCOOP_MIRROR) {
-            Write-Dim "    Using mirror"
-            $env:SCOOP_REPO = "$script:SCOOP_MIRROR/scoop"
-            irm "$script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1" | iex
-        } else {
-            Write-Dim "    Using official"
-            irm get.scoop.sh | iex
-        }
+        irm get.scoop.sh | iex
     }
     
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
