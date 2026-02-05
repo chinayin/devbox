@@ -1,14 +1,14 @@
 #!/bin/bash
 #
 # devbox-mac.sh - Mac 开发环境初始化脚本
-# 项目: https://github.com/chinaiyn/devbox
+# 项目: https://github.com/chinayin/devbox
 # 协议: MIT
 #
 
 set -e
 
 VERSION="v0.1"
-PROJECT_URL="https://github.com/chinaiyn/devbox"
+PROJECT_URL="https://github.com/chinayin/devbox"
 
 #===========================================
 # 镜像源配置（默认官方源）

@@ -14,12 +14,12 @@ Mac / Windows 开发环境一键初始化脚本，专为 AI/Vibe Coding 新手�
 
 **国内用户（推荐）**
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/chinaiyn/devbox/master/devbox-mac.sh)" -- install --china --vibecoding
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/chinayin/devbox/master/devbox-mac.sh)" -- install --china --vibecoding
 ```
 
 **海外用户**
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/chinaiyn/devbox/master/devbox-mac.sh)" -- install --vibecoding
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/chinayin/devbox/master/devbox-mac.sh)" -- install --vibecoding
 ```
 
 ### Windows
@@ -28,12 +28,12 @@ Mac / Windows 开发环境一键初始化脚本，专为 AI/Vibe Coding 新手�
 
 **国内用户（推荐）**
 ```powershell
-irm https://raw.githubusercontent.com/chinaiyn/devbox/master/devbox-win.ps1 -OutFile devbox-win.ps1; .\devbox-win.ps1 install -China -VibeCoding
+irm https://raw.githubusercontent.com/chinayin/devbox/master/devbox-win.ps1 -OutFile devbox-win.ps1; .\devbox-win.ps1 install -China -VibeCoding
 ```
 
 **海外用户**
 ```powershell
-irm https://raw.githubusercontent.com/chinaiyn/devbox/master/devbox-win.ps1 -OutFile devbox-win.ps1; .\devbox-win.ps1 install -VibeCoding
+irm https://raw.githubusercontent.com/chinayin/devbox/master/devbox-win.ps1 -OutFile devbox-win.ps1; .\devbox-win.ps1 install -VibeCoding
 ```
 
 > 这会安装包管理器 + Python + Node.js，国内用户自动配置镜像加速。

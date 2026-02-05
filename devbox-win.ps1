@@ -3,7 +3,7 @@
 .SYNOPSIS
     devbox-win.ps1 - Windows 开发环境初始化脚本
 .DESCRIPTION
-    项目: https://github.com/chinaiyn/devbox
+    项目: https://github.com/chinayin/devbox
     协议: MIT
 .EXAMPLE
     .\devbox-win.ps1 install -China -VibeCoding
@@ -35,7 +35,7 @@ $ErrorActionPreference = 'Stop'
 # 配置
 #===========================================
 $script:VERSION = "v0.1"
-$script:PROJECT_URL = "https://github.com/chinaiyn/devbox"
+$script:PROJECT_URL = "https://github.com/chinayin/devbox"
 
 # 镜像源配置
 $script:SCOOP_MIRROR = ""
