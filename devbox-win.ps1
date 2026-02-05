@@ -1,10 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    devbox-win.ps1 - Windows 开发环境初始化脚本
+    devbox-win.ps1 - Windows Development Environment Setup Script
 .DESCRIPTION
-    项目: https://github.com/chinayin/devbox
-    协议: MIT
+    Project: https://github.com/chinayin/devbox
+    License: MIT
 .EXAMPLE
     .\devbox-win.ps1 install -China -VibeCoding
     .\devbox-win.ps1 status
@@ -32,33 +32,31 @@ param(
 $ErrorActionPreference = 'Stop'
 
 #===========================================
-# 配置
+# Configuration
 #===========================================
 $script:VERSION = "v0.1"
 $script:PROJECT_URL = "https://github.com/chinayin/devbox"
 
-# 镜像源配置
+# Mirror configuration
 $script:SCOOP_MIRROR = ""
 $script:PIP_MIRROR = "https://pypi.org/simple"
 $script:NPM_MIRROR = "https://registry.npmjs.org"
 $script:GO_PROXY = ""
 $script:RUST_MIRROR = ""
 
-# 中国镜像
-# 注意: Gitee 镜像在 CI 环境可能需要认证,使用 GitHub 镜像作为备选
+# China mirrors
 $script:CN_SCOOP_MIRROR = "https://gitee.com/scoop-installer"
-$script:CN_SCOOP_MIRROR_FALLBACK = "https://github.com/ScoopInstaller"
 $script:CN_PIP_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
 $script:CN_NPM_MIRROR = "https://registry.npmmirror.com"
 $script:CN_GO_PROXY = "https://goproxy.cn,direct"
 $script:CN_RUST_MIRROR = "https://rsproxy.cn"
 
 #===========================================
-# 工具函数
+# Utility Functions
 #===========================================
-function Write-Info { param([string]$Message) Write-Host "✓ " -ForegroundColor Green -NoNewline; Write-Host $Message }
-function Write-Fail { param([string]$Message) Write-Host "✗ " -ForegroundColor Red -NoNewline; Write-Host $Message }
-function Write-Warn { param([string]$Message) Write-Host "! " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
+function Write-Info { param([string]$Message) Write-Host "[OK] " -ForegroundColor Green -NoNewline; Write-Host $Message }
+function Write-Fail { param([string]$Message) Write-Host "[X]  " -ForegroundColor Red -NoNewline; Write-Host $Message }
+function Write-Warn { param([string]$Message) Write-Host "[!]  " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
 function Write-Dim { param([string]$Message) Write-Host $Message -ForegroundColor Gray }
 function Write-Step { param([string]$Message) Write-Host "`n==> " -ForegroundColor Cyan -NoNewline; Write-Host $Message -ForegroundColor White }
 
@@ -66,7 +64,7 @@ function Write-Section {
     param([string]$Title)
     Write-Host ""
     Write-Host $Title -ForegroundColor White
-    Write-Host "────────────────────────────────────────"
+    Write-Host "----------------------------------------"
 }
 
 function Write-Header {
@@ -75,7 +73,7 @@ function Write-Header {
     Write-Host "devbox " -ForegroundColor White -NoNewline
     Write-Host $script:VERSION
     Write-Host $script:PROJECT_URL -ForegroundColor Gray
-    Write-Host "────────────────────────────────────────"
+    Write-Host "----------------------------------------"
     Write-Host $Subtitle -ForegroundColor Cyan
 }
 
@@ -83,7 +81,6 @@ function Test-Command {
     param([string]$Name)
     $cmd = Get-Command $Name -ErrorAction SilentlyContinue
     if (-not $cmd) { return $false }
-    # 排除 Windows App Alias (假命令)
     if ($cmd.Source -match 'WindowsApps') { return $false }
     return $true
 }
@@ -106,22 +103,19 @@ function Add-ToProfile {
 }
 
 function Get-SystemProxy {
-    # 1. 检查环境变量
     if ($env:HTTPS_PROXY) { return @{ Source = "HTTPS_PROXY"; Value = $env:HTTPS_PROXY } }
     if ($env:HTTP_PROXY) { return @{ Source = "HTTP_PROXY"; Value = $env:HTTP_PROXY } }
     if ($env:ALL_PROXY) { return @{ Source = "ALL_PROXY"; Value = $env:ALL_PROXY } }
     
-    # 2. 检查 Windows 系统代理
     $reg = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
     if ($reg.ProxyEnable -eq 1 -and $reg.ProxyServer) {
-        return @{ Source = "系统代理"; Value = $reg.ProxyServer }
+        return @{ Source = "System"; Value = $reg.ProxyServer }
     }
-    
     return $null
 }
 
 #===========================================
-# 镜像配置
+# Mirror Configuration
 #===========================================
 function Set-ChinaMirror {
     $script:SCOOP_MIRROR = $script:CN_SCOOP_MIRROR
@@ -132,54 +126,53 @@ function Set-ChinaMirror {
 }
 
 #===========================================
-# 帮助信息
+# Help
 #===========================================
 function Show-Help {
     @"
 devbox $script:VERSION
-Windows 开发环境初始化脚本 | $script:PROJECT_URL
+Windows Development Environment Setup | $script:PROJECT_URL
 
-用法: .\devbox-win.ps1 <命令> [选项]
+Usage: .\devbox-win.ps1 <command> [options]
 
-命令:
-  install     安装开发环境
-  status      检查安装状态
-  help        显示帮助信息
+Commands:
+  install     Install development environment
+  status      Check installation status
+  help        Show this help
 
-install 选项:
-  -China, -c          使用中国镜像源 (清华/淘宝/Gitee)
-  -ScoopOnly          只安装 Scoop
-  -VibeCoding         安装 AI 编程环境 (Python + Node.js)
-  -Python             安装 Python
-  -PythonVersion      指定 Python 版本 (如 3.12)
-  -NodeJS             安装 Node.js
-  -NodeJSVersion      指定 Node.js 版本 (如 20)
-  -Go                 安装 Go
-  -GoVersion          指定 Go 版本
-  -Rust               安装 Rust
+Install Options:
+  -China, -c          Use China mirrors (Tsinghua/Taobao/Gitee)
+  -ScoopOnly          Only install Scoop
+  -VibeCoding         Install AI coding environment (Python + Node.js)
+  -Python             Install Python
+  -PythonVersion      Specify Python version (e.g. 3.12)
+  -NodeJS             Install Node.js
+  -NodeJSVersion      Specify Node.js version (e.g. 20)
+  -Go                 Install Go
+  -GoVersion          Specify Go version
+  -Rust               Install Rust
 
-示例:
-  .\devbox-win.ps1 status                           # 检查当前环境
-  .\devbox-win.ps1 install -China -VibeCoding       # AI 编程环境 (推荐)
-  .\devbox-win.ps1 install -China -Python -NodeJS   # 安装 Python + Node.js
-  .\devbox-win.ps1 install -ScoopOnly -China        # 只装 Scoop
+Examples:
+  .\devbox-win.ps1 status                           # Check environment
+  .\devbox-win.ps1 install -China -VibeCoding       # AI coding (recommended)
+  .\devbox-win.ps1 install -China -Python -NodeJS   # Install Python + Node.js
+  .\devbox-win.ps1 install -ScoopOnly -China        # Only install Scoop
 "@
 }
 
 #===========================================
-# 命令: status
+# Command: status
 #===========================================
 function Invoke-Status {
-    Write-Header "status - 环境检查"
+    Write-Header "status - Environment Check"
     
-    Write-Section "系统信息"
+    Write-Section "System Info"
     $os = Get-CimInstance Win32_OperatingSystem
     Write-Host "  Windows    $($os.Caption) ($($os.Version))"
-    Write-Host "  架构       $env:PROCESSOR_ARCHITECTURE"
+    Write-Host "  Arch       $env:PROCESSOR_ARCHITECTURE"
     Write-Host "  PowerShell $($PSVersionTable.PSVersion)"
-    Write-Host "  配置文件   $(Get-ProfilePath)"
+    Write-Host "  Profile    $(Get-ProfilePath)"
     
-    # 显示代理信息
     $proxy = Get-SystemProxy
     if ($proxy) {
         Write-Host "  Proxy      " -NoNewline
@@ -187,194 +180,177 @@ function Invoke-Status {
         Write-Host " ($($proxy.Source))" -ForegroundColor Gray
     }
     
-    Write-Section "基础工具"
+    Write-Section "Base Tools"
     if (Test-Command scoop) {
         $scoopVer = (scoop --version 2>$null | Select-Object -First 1) -replace 'v', ''
         Write-Info "Scoop $scoopVer"
-        Write-Dim "    ├─ 路径: $(Get-Command scoop | Select-Object -ExpandProperty Source)"
+        Write-Dim "    Path: $(Get-Command scoop | Select-Object -ExpandProperty Source)"
         $scoopConfig = scoop config 2>$null
         if ($scoopConfig -match 'SCOOP_REPO') {
-            Write-Dim "    └─ 镜像: 已配置"
+            Write-Dim "    Mirror: Configured"
         } else {
-            Write-Dim "    └─ 镜像: 官方源"
+            Write-Dim "    Mirror: Official"
         }
     } else {
-        Write-Fail "Scoop 未安装"
+        Write-Fail "Scoop not installed"
     }
     
     if (Test-Command git) {
         $gitVer = (git --version) -replace 'git version ', ''
         Write-Info "Git $gitVer"
     } else {
-        Write-Fail "Git 未安装"
+        Write-Fail "Git not installed"
     }
     
-    Write-Section "编程语言"
+    Write-Section "Languages"
     if (Test-Command python) {
         $pyVer = (python --version 2>&1) -replace 'Python ', ''
         Write-Info "Python $pyVer"
-        Write-Dim "    ├─ 路径: $(Get-Command python | Select-Object -ExpandProperty Source)"
+        Write-Dim "    Path: $(Get-Command python | Select-Object -ExpandProperty Source)"
         $pipConfig = "$env:APPDATA\pip\pip.ini"
         if (Test-Path $pipConfig) {
             $pipMirror = (Get-Content $pipConfig | Select-String 'index-url' | ForEach-Object { $_ -replace '.*=\s*', '' })
-            Write-Dim "    └─ pip:  $pipMirror"
+            Write-Dim "    pip:  $pipMirror"
         } else {
-            Write-Dim "    └─ pip:  官方源"
+            Write-Dim "    pip:  Official"
         }
     } else {
-        Write-Dim "  Python 未安装"
+        Write-Dim "  Python not installed"
     }
     
     if (Test-Command node) {
         $nodeVer = node --version
         Write-Info "Node.js $nodeVer"
-        Write-Dim "    ├─ 路径: $(Get-Command node | Select-Object -ExpandProperty Source)"
+        Write-Dim "    Path: $(Get-Command node | Select-Object -ExpandProperty Source)"
         if (Test-Command npm) {
             $npmMirror = npm config get registry 2>$null
-            Write-Dim "    └─ npm:  $npmMirror"
+            Write-Dim "    npm:  $npmMirror"
         }
     } else {
-        Write-Dim "  Node.js 未安装"
+        Write-Dim "  Node.js not installed"
     }
     
     if (Test-Command go) {
         $goVer = (go version) -replace 'go version go', '' -replace ' .*', ''
         Write-Info "Go $goVer"
-        Write-Dim "    ├─ 路径: $(Get-Command go | Select-Object -ExpandProperty Source)"
+        Write-Dim "    Path: $(Get-Command go | Select-Object -ExpandProperty Source)"
         $goProxy = go env GOPROXY 2>$null
-        Write-Dim "    └─ proxy: $goProxy"
+        Write-Dim "    proxy: $goProxy"
     } else {
-        Write-Dim "  Go 未安装"
+        Write-Dim "  Go not installed"
     }
     
     if (Test-Command rustc) {
         $rustVer = (rustc --version) -replace 'rustc ', '' -replace ' .*', ''
         Write-Info "Rust $rustVer"
-        Write-Dim "    └─ 路径: $(Get-Command rustc | Select-Object -ExpandProperty Source)"
+        Write-Dim "    Path: $(Get-Command rustc | Select-Object -ExpandProperty Source)"
     } else {
-        Write-Dim "  Rust 未安装"
+        Write-Dim "  Rust not installed"
     }
     
     Write-Host ""
 }
 
 #===========================================
-# 安装函数
+# Install Functions
 #===========================================
 function Install-Scoop {
-    Write-Step "安装 Scoop"
+    Write-Step "Installing Scoop"
     
     if (Test-Command scoop) {
         $scoopVer = scoop --version 2>$null | Select-Object -First 1
-        Write-Info "Scoop 已安装 ($scoopVer)"
+        Write-Info "Scoop already installed ($scoopVer)"
         return
     }
     
-    # 设置执行策略
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
     
     if ($script:SCOOP_MIRROR) {
-        # 使用 Gitee 镜像安装
         $env:SCOOP_REPO = "$script:SCOOP_MIRROR/scoop"
         Invoke-RestMethod "$script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1" | Invoke-Expression
     } else {
-        # 官方安装
         Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
     }
     
-    # 刷新环境变量
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
     
-    Write-Info "Scoop 安装完成"
+    Write-Info "Scoop installed"
 }
 
 function Install-Git {
-    Write-Step "安装 Git"
+    Write-Step "Installing Git"
     
     if (Test-Command git) {
         $gitVer = git --version
-        Write-Info "Git 已安装 ($gitVer)"
+        Write-Info "Git already installed ($gitVer)"
         return
     }
     
     scoop install git
-    Write-Info "Git 安装完成"
+    Write-Info "Git installed"
 }
 
 function Save-ScoopMirror {
-    Write-Step "配置 Scoop bucket"
+    Write-Step "Configuring Scoop bucket"
     
     if ($script:SCOOP_MIRROR) {
-        # 配置 Scoop 仓库镜像
         scoop config SCOOP_REPO "$script:SCOOP_MIRROR/scoop"
         
-        # 临时禁用 Git 交互式认证 (仅影响当前命令)
         $env:GIT_TERMINAL_PROMPT = "0"
         
-        # 移除现有的 main bucket (可能是官方源)
         scoop bucket rm main 2>$null
-        
         scoop update 2>$null
-        
-        # 添加镜像 bucket (注意: Gitee 上是大写 Main)
         scoop bucket add main "$script:SCOOP_MIRROR/Main" 2>$null
-        $addResult = $LASTEXITCODE
         
-        # 恢复环境变量
         Remove-Item Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue
         
-        # 验证 bucket 是否添加成功
         $buckets = scoop bucket list 2>$null
         if ($buckets -match 'main') {
-            Write-Info "Scoop 镜像已配置 (Gitee)"
+            Write-Info "Scoop mirror configured (Gitee)"
             return
         }
         
-        Write-Warn "Gitee 镜像不可用,回退到官方源"
+        Write-Warn "Gitee mirror unavailable, falling back to official"
     }
     
-    # 检查 main bucket 是否已存在 (非镜像模式)
     $buckets = scoop bucket list 2>$null
     if ($buckets -match 'main') {
-        Write-Info "main bucket 已存在"
+        Write-Info "main bucket exists"
         return
     }
     
-    # 使用官方 bucket
     scoop bucket add main
     if ($LASTEXITCODE -ne 0) {
-        throw "无法添加 Scoop main bucket"
+        throw "Failed to add Scoop main bucket"
     }
-    Write-Info "Scoop main bucket 已配置"
+    Write-Info "Scoop main bucket configured"
 }
 
 function Install-Python {
-    Write-Step "安装 Python"
+    Write-Step "Installing Python"
     
     $pkg = "python"
     if ($PythonVersion) { $pkg = "python$PythonVersion" }
     
-    # 检查是否真正安装了 Python (排除 Windows Store 别名)
     $pythonInstalled = $false
     if (Test-Command python) {
         $pyOutput = python --version 2>&1
         if ($pyOutput -notmatch 'Microsoft Store|was not found') {
             $pythonInstalled = $true
-            Write-Info "Python 已安装 ($pyOutput)"
+            Write-Info "Python already installed ($pyOutput)"
         }
     }
     
     if (-not $pythonInstalled) {
         scoop install $pkg
         if ($LASTEXITCODE -ne 0) {
-            throw "Python 安装失败"
+            throw "Python installation failed"
         }
-        # 刷新环境变量
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        Write-Info "Python 安装完成 ($(python --version 2>&1))"
+        Write-Info "Python installed ($(python --version 2>&1))"
     }
     
-    Write-Step "配置 pip 镜像"
+    Write-Step "Configuring pip mirror"
     $pipDir = "$env:APPDATA\pip"
     if (-not (Test-Path $pipDir)) { New-Item -ItemType Directory -Path $pipDir -Force | Out-Null }
     $mirror = $script:PIP_MIRROR
@@ -385,83 +361,79 @@ function Install-Python {
 index-url = $mirror
 trusted-host = $pipHost
 "@ | Set-Content "$pipDir\pip.ini"
-    Write-Info "pip → $mirror"
+    Write-Info "pip -> $mirror"
 }
 
 function Install-NodeJS {
-    Write-Step "安装 Node.js"
+    Write-Step "Installing Node.js"
     
     $pkg = "nodejs"
     if ($NodeJSVersion) { $pkg = "nodejs$NodeJSVersion" }
     
     if (Test-Command node) {
         $nodeVer = node --version
-        Write-Info "Node.js 已安装 ($nodeVer)"
+        Write-Info "Node.js already installed ($nodeVer)"
     } else {
         scoop install $pkg
-        # 刷新环境变量
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        Write-Info "Node.js 安装完成 ($(node --version))"
+        Write-Info "Node.js installed ($(node --version))"
     }
     
-    Write-Step "配置 npm 镜像"
+    Write-Step "Configuring npm mirror"
     $mirror = $script:NPM_MIRROR
     if (-not $mirror) { $mirror = "https://registry.npmjs.org" }
     npm config set registry $mirror
-    Write-Info "npm → $mirror"
+    Write-Info "npm -> $mirror"
 }
 
 function Install-Go {
-    Write-Step "安装 Go"
+    Write-Step "Installing Go"
     
     $pkg = "go"
     
     if (Test-Command go) {
         $goVer = go version
-        Write-Info "Go 已安装 ($goVer)"
+        Write-Info "Go already installed ($goVer)"
     } else {
         scoop install $pkg
-        # 刷新环境变量
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        Write-Info "Go 安装完成 ($(go version))"
+        Write-Info "Go installed ($(go version))"
     }
     
     $proxy = $script:GO_PROXY
     if ($proxy) {
-        Write-Step "配置 Go 镜像"
+        Write-Step "Configuring Go proxy"
         go env -w GOPROXY="$proxy"
-        Write-Info "GOPROXY → $proxy"
+        Write-Info "GOPROXY -> $proxy"
     }
 }
 
 function Install-Rust {
-    Write-Step "安装 Rust"
+    Write-Step "Installing Rust"
     
     $mirror = $script:RUST_MIRROR
     
     if (Test-Command rustc) {
         $rustVer = rustc --version
-        Write-Info "Rust 已安装 ($rustVer)"
+        Write-Info "Rust already installed ($rustVer)"
     } else {
         if ($mirror) {
             $env:RUSTUP_DIST_SERVER = $mirror
             $env:RUSTUP_UPDATE_ROOT = "$mirror/rustup"
         }
         
-        # 下载并运行 rustup-init
         $rustupInit = "$env:TEMP\rustup-init.exe"
         Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
         & $rustupInit -y --default-toolchain stable
         Remove-Item $rustupInit -Force
         
-        # 刷新环境变量
         $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
         
-        Write-Info "Rust 安装完成 ($(rustc --version))"
+        Write-Info "Rust installed ($(rustc --version))"
     }
     
     if ($mirror) {
-        Write-Step "配置 Rust 镜像"
+        Write-Step "Configuring Rust mirror"
         $cargoConfig = "$env:USERPROFILE\.cargo\config"
         @"
 [source.crates-io]
@@ -470,36 +442,33 @@ replace-with = 'rsproxy'
 [source.rsproxy]
 registry = "$mirror/crates.io-index"
 "@ | Set-Content $cargoConfig
-        Write-Info "Cargo → $mirror"
+        Write-Info "Cargo -> $mirror"
     }
 }
 
 #===========================================
-# 命令: install
+# Command: install
 #===========================================
 function Invoke-Install {
-    # 设置镜像
     if ($China) {
         Set-ChinaMirror
-        $region = "中国镜像"
+        $region = "China Mirror"
     } else {
-        $region = "官方源"
+        $region = "Official"
     }
     
-    # VibeCoding 快捷方式
     if ($VibeCoding) {
         $script:Python = $true
         $script:NodeJS = $true
     }
     
-    Write-Header "install - 环境安装 [$region]"
+    Write-Header "install - Setup [$region]"
     
-    # 检测代理并提示
     $proxy = Get-SystemProxy
     if ($proxy) {
-        Write-Info "检测到代理: $($proxy.Value) ($($proxy.Source))"
+        Write-Info "Proxy detected: $($proxy.Value) ($($proxy.Source))"
         if ($China) {
-            Write-Warn "已有代理,可能不需要 -China 镜像"
+            Write-Warn "Proxy detected, -China mirror may not be needed"
         }
     }
     
@@ -509,8 +478,8 @@ function Invoke-Install {
     
     if ($ScoopOnly) {
         Write-Host ""
-        Write-Info "Scoop 安装完成 (-ScoopOnly)"
-        Write-Warn "重新打开 PowerShell 生效"
+        Write-Info "Scoop installed (-ScoopOnly)"
+        Write-Warn "Restart PowerShell to take effect"
         return
     }
     
@@ -520,8 +489,8 @@ function Invoke-Install {
     if ($Rust) { Install-Rust }
     
     Write-Host ""
-    Write-Host "────────────────────────────────────────"
-    Write-Host "安装完成" -ForegroundColor Green
+    Write-Host "----------------------------------------"
+    Write-Host "Installation Complete" -ForegroundColor Green
     Write-Host ""
     if (Test-Command scoop) { Write-Host "  Scoop     $((scoop --version 2>$null | Select-Object -First 1) -replace 'v', '')" }
     if ($Python -and (Test-Command python)) { Write-Host "  Python    $((python --version 2>&1) -replace 'Python ', '')" }
@@ -529,11 +498,11 @@ function Invoke-Install {
     if ($Go -and (Test-Command go)) { Write-Host "  Go        $((go version) -replace 'go version go', '' -replace ' .*', '')" }
     if ($Rust -and (Test-Command rustc)) { Write-Host "  Rust      $((rustc --version) -replace 'rustc ', '' -replace ' .*', '')" }
     Write-Host ""
-    Write-Warn "重新打开 PowerShell 生效"
+    Write-Warn "Restart PowerShell to take effect"
 }
 
 #===========================================
-# 主入口
+# Main Entry
 #===========================================
 switch ($Command) {
     'install' { Invoke-Install }
