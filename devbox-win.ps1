@@ -317,17 +317,20 @@ function Save-ScoopMirror {
         scoop update 2>$null
         
         # 添加镜像 bucket (注意: Gitee 上是大写 Main)
-        $output = scoop bucket add main "$script:SCOOP_MIRROR/Main" 2>&1
+        scoop bucket add main "$script:SCOOP_MIRROR/Main" 2>$null
+        $addResult = $LASTEXITCODE
         
         # 恢复环境变量
         Remove-Item Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue
         
-        if ($LASTEXITCODE -eq 0 -and $output -notmatch 'ERROR|fatal') {
+        # 验证 bucket 是否添加成功
+        $buckets = scoop bucket list 2>$null
+        if ($buckets -match 'main') {
             Write-Info "Scoop 镜像已配置 (Gitee)"
             return
         }
+        
         Write-Warn "Gitee 镜像不可用,回退到官方源"
-        scoop bucket rm main 2>$null
     }
     
     # 检查 main bucket 是否已存在 (非镜像模式)
