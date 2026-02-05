@@ -80,7 +80,7 @@ function Write-Section {
 function Write-Header {
     param([string]$Subtitle)
     Write-Host ""
-    Write-Host "devbox " -ForegroundColor White -NoNewline
+    Write-Host "Devbox " -ForegroundColor White -NoNewline
     Write-Host $script:VERSION
     Write-Host $script:PROJECT_URL -ForegroundColor Gray
     Write-Host "----------------------------------------"
@@ -132,7 +132,7 @@ function Set-ChinaMirror {
 #===========================================
 function Show-Help {
     @"
-devbox $script:VERSION
+Devbox $script:VERSION
 Windows Development Environment Setup | $script:PROJECT_URL
 
 Usage: .\devbox-win.ps1 <command> [options]
