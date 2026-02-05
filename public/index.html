@@ -51,6 +51,22 @@
         .os-icon {
             font-size: 1.2rem;
         }
+        .hint {
+            color: #666;
+            font-size: 0.9rem;
+            margin: 0 0 12px;
+            line-height: 1.6;
+        }
+        .hint kbd {
+            display: inline-block;
+            padding: 2px 6px;
+            font-size: 0.8rem;
+            font-family: inherit;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+        }
         .code-block {
             position: relative;
         }
@@ -128,6 +144,7 @@
         
         <div class="section">
             <div class="os-label"><span class="os-icon">🍎</span> macOS</div>
+            <p class="hint">打开「终端」应用（按 <kbd>⌘</kbd> + <kbd>空格</kbd>，输入 Terminal），粘贴以下命令并回车：</p>
             <div class="code-block">
                 <pre id="cmd-mac">/bin/bash -c "$(curl -fsSL <span class="domain-url"></span>/devbox-mac.sh)" -- install --china --vibecoding</pre>
             </div>
@@ -135,6 +152,7 @@
         
         <div class="section">
             <div class="os-label"><span class="os-icon">🪟</span> Windows</div>
+            <p class="hint">右键点击开始菜单，选择「Windows PowerShell」或「终端」，粘贴以下命令并回车：</p>
             <div class="code-block">
                 <pre id="cmd-win">irm <span class="domain-url"></span>/devbox-win.ps1 -OutFile devbox-win.ps1; .\devbox-win.ps1 install -China -VibeCoding</pre>
             </div>
