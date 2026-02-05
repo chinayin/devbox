@@ -189,8 +189,7 @@ function Invoke-Status {
     
     Write-Section "Base Tools"
     if (Test-Command scoop) {
-        $scoopVer = (scoop --version 2>&1 | Select-String 'v\d+\.\d+' | Select-Object -First 1) -replace '.*?(v[\d.]+).*', '$1'
-        Write-Info "Scoop $scoopVer"
+        Write-Info "Scoop"
         Write-Dim "    Path: $(Get-Command scoop | Select-Object -ExpandProperty Source)"
         # Check aria2 status
         if (Test-Command aria2c) {
@@ -268,8 +267,7 @@ function Install-Scoop {
     Write-Step "Installing Scoop"
     
     if (Test-Command scoop) {
-        $scoopVer = (scoop --version 2>&1 | Select-String 'v\d+\.\d+' | Select-Object -First 1) -replace '.*?(v[\d.]+).*', '$1'
-        Write-Info "Scoop already installed ($scoopVer)"
+        Write-Info "Scoop already installed"
         return
     }
     
@@ -484,10 +482,7 @@ function Invoke-Install {
     Write-Host "----------------------------------------"
     Write-Host "Installation Complete" -ForegroundColor Green
     Write-Host ""
-    if (Test-Command scoop) { 
-        $scoopVer = (scoop --version 2>&1 | Select-String 'v\d+\.\d+' | Select-Object -First 1) -replace '.*?(v[\d.]+).*', '$1'
-        if ($scoopVer) { Write-Host "  Scoop     $scoopVer" }
-    }
+    if (Test-Command scoop) { Write-Host "  Scoop     installed" }
     if ($Python -and (Test-Command python)) { Write-Host "  Python    $((python --version 2>&1) -replace 'Python ', '')" }
     if ($NodeJS -and (Test-Command node)) { Write-Host "  Node.js   $(node --version)" }
     if ($Go -and (Test-Command go)) { Write-Host "  Go        $((go version) -replace 'go version go', '' -replace ' .*', '')" }
