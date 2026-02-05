@@ -21,6 +21,8 @@ jobs:
       - name: Verify installations
         shell: pwsh
         run: |
+          # 刷新 PATH 以包含 Scoop 安装的工具
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
           Write-Host "Scoop $(scoop --version 2>$null | Select-Object -First 1)"
           Write-Host "$(python --version 2>&1)"
           Write-Host "Node.js $(node --version)"
@@ -28,7 +30,9 @@ jobs:
 
       - name: Check status
         shell: pwsh
-        run: .\devbox-win.ps1 status
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          .\devbox-win.ps1 status
 
   test-install-china:
     name: Install China
@@ -39,10 +43,14 @@ jobs:
       - name: Install with -China flag
         shell: pwsh
         run: .\devbox-win.ps1 install -China -VibeCoding
+        env:
+          GIT_TERMINAL_PROMPT: 0
 
       - name: Verify mirror configs
         shell: pwsh
         run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          
           Write-Host "==> Checking pip config"
           $pipConfig = "$env:APPDATA\pip\pip.ini"
           Get-Content $pipConfig
@@ -59,7 +67,9 @@ jobs:
 
       - name: Check status
         shell: pwsh
-        run: .\devbox-win.ps1 status
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          .\devbox-win.ps1 status
 
   test-install-languages:
     name: Install All Languages
@@ -74,10 +84,13 @@ jobs:
       - name: Verify installations
         shell: pwsh
         run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:USERPROFILE\.cargo\bin;$env:PATH"
           Write-Host "$(go version)"
           Write-Host "$(rustc --version)"
           Write-Host "$(cargo --version)"
 
       - name: Final status
         shell: pwsh
-        run: .\devbox-win.ps1 status
+        run: |
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:USERPROFILE\.cargo\bin;$env:PATH"
+          .\devbox-win.ps1 status

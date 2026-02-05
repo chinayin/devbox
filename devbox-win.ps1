@@ -45,7 +45,9 @@ $script:GO_PROXY = ""
 $script:RUST_MIRROR = ""
 
 # 中国镜像
+# 注意: Gitee 镜像在 CI 环境可能需要认证,使用 GitHub 镜像作为备选
 $script:CN_SCOOP_MIRROR = "https://gitee.com/scoop-installer"
+$script:CN_SCOOP_MIRROR_FALLBACK = "https://github.com/ScoopInstaller"
 $script:CN_PIP_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
 $script:CN_NPM_MIRROR = "https://registry.npmmirror.com"
 $script:CN_GO_PROXY = "https://goproxy.cn,direct"
@@ -277,13 +279,43 @@ function Install-Git {
 }
 
 function Save-ScoopMirror {
-    if (-not $script:SCOOP_MIRROR) { return }
+    Write-Step "配置 Scoop bucket"
     
-    Write-Step "配置 Scoop 镜像"
-    scoop config SCOOP_REPO "$script:SCOOP_MIRROR/scoop"
-    scoop bucket rm main 2>$null
-    scoop bucket add main "$script:SCOOP_MIRROR/scoop-main"
-    Write-Info "Scoop 镜像已配置"
+    # 检查 main bucket 是否已存在
+    $buckets = scoop bucket list 2>$null
+    if ($buckets -match 'main') {
+        Write-Info "main bucket 已存在"
+        return
+    }
+    
+    if ($script:SCOOP_MIRROR) {
+        scoop config SCOOP_REPO "$script:SCOOP_MIRROR/scoop"
+        
+        # 临时禁用 Git 交互式认证 (仅影响当前命令)
+        $env:GIT_TERMINAL_PROMPT = "0"
+        
+        scoop update 2>$null
+        
+        # 尝试添加镜像 bucket (注意: Gitee 上是大写 Main)
+        $output = scoop bucket add main "$script:SCOOP_MIRROR/Main" 2>&1
+        
+        # 恢复环境变量
+        Remove-Item Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue
+        
+        if ($LASTEXITCODE -eq 0 -and $output -notmatch 'ERROR|fatal') {
+            Write-Info "Scoop 镜像已配置 (Gitee)"
+            return
+        }
+        Write-Warn "Gitee 镜像不可用,回退到官方源"
+        scoop bucket rm main 2>$null
+    }
+    
+    # 使用官方 bucket
+    scoop bucket add main
+    if ($LASTEXITCODE -ne 0) {
+        throw "无法添加 Scoop main bucket"
+    }
+    Write-Info "Scoop main bucket 已配置"
 }
 
 function Install-Python {
@@ -292,11 +324,21 @@ function Install-Python {
     $pkg = "python"
     if ($PythonVersion) { $pkg = "python$PythonVersion" }
     
+    # 检查是否真正安装了 Python (排除 Windows Store 别名)
+    $pythonInstalled = $false
     if (Test-Command python) {
-        $pyVer = python --version 2>&1
-        Write-Info "Python 已安装 ($pyVer)"
-    } else {
+        $pyOutput = python --version 2>&1
+        if ($pyOutput -notmatch 'Microsoft Store|was not found') {
+            $pythonInstalled = $true
+            Write-Info "Python 已安装 ($pyOutput)"
+        }
+    }
+    
+    if (-not $pythonInstalled) {
         scoop install $pkg
+        if ($LASTEXITCODE -ne 0) {
+            throw "Python 安装失败"
+        }
         # 刷新环境变量
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
         Write-Info "Python 安装完成 ($(python --version 2>&1))"
