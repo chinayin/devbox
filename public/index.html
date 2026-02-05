@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Devbox - 开发环境一键初始化</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+        }
+        h1 {
+            margin: 0 0 8px;
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            color: #666;
+            margin: 0 0 32px;
+            font-size: 1.1rem;
+        }
+        .section {
+            margin-bottom: 24px;
+        }
+        .section:last-of-type {
+            margin-bottom: 0;
+        }
+        .os-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 1rem;
+        }
+        .os-icon {
+            font-size: 1.2rem;
+        }
+        .code-block {
+            position: relative;
+        }
+        pre {
+            background: #1a1a2e;
+            color: #eee;
+            padding: 16px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin: 0;
+        }
+        pre:hover {
+            background: #16213e;
+        }
+        .copy-btn {
+            position: absolute;
+            top: -12px;
+            right: 8px;
+            background: #333;
+            border: none;
+            border-radius: 6px;
+            padding: 6px;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: all 0.2s;
+        }
+        .copy-btn:hover {
+            opacity: 1;
+            background: #555;
+        }
+        .copy-btn svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+            fill: #fff;
+        }
+        .copy-btn.copied {
+            opacity: 1;
+            background: #4ade80;
+        }
+        .footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #eee;
+            text-align: center;
+        }
+        .github-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #333;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: #f5f5f5;
+            transition: all 0.2s;
+        }
+        .github-link:hover {
+            background: #333;
+            color: #fff;
+        }
+        .github-icon {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Devbox</h1>
+        <p class="subtitle">Mac / Windows 开发环境一键初始化脚本</p>
+        
+        <div class="section">
+            <div class="os-label"><span class="os-icon">🍎</span> macOS</div>
+            <div class="code-block">
+                <pre id="cmd-mac">/bin/bash -c "$(curl -fsSL <span class="domain-url"></span>/devbox-mac.sh)" -- install --china --vibecoding</pre>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="os-label"><span class="os-icon">🪟</span> Windows</div>
+            <div class="code-block">
+                <pre id="cmd-win">irm <span class="domain-url"></span>/devbox-win.ps1 -OutFile devbox-win.ps1; .\devbox-win.ps1 install -China -VibeCoding</pre>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <a href="https://github.com/chinayin/devbox" class="github-link">
+                <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                GitHub
+            </a>
+        </div>
+    </div>
+    <script>
+        const baseUrl = location.origin;
+        document.querySelectorAll('.domain-url').forEach(el => el.textContent = baseUrl);
+
+        // 复制图标 SVG
+        const copyIcon = `<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+        const checkIcon = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`;
+
+        // 为每个 code-block 添加复制按钮
+        document.querySelectorAll('.code-block').forEach(block => {
+            const pre = block.querySelector('pre');
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.innerHTML = copyIcon;
+            btn.title = '复制';
+            btn.onclick = async () => {
+                await navigator.clipboard.writeText(pre.textContent);
+                btn.innerHTML = checkIcon;
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = copyIcon;
+                    btn.classList.remove('copied');
+                }, 2000);
+            };
+            block.appendChild(btn);
+        });
+    </script>
+</body>
+</html>

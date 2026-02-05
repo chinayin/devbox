@@ -1,0 +1,13 @@
+{
+  "name": "devbox",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf .dist && mkdir -p .dist && cp -r public/* .dist/ && cp devbox-mac.sh devbox-win.ps1 .dist/",
+    "deploy": "yarn build && wrangler pages deploy",
+    "dev": "yarn build && wrangler pages dev .dist"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

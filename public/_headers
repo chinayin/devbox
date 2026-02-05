@@ -1,0 +1,13 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/devbox-mac.sh
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *
+
+/devbox-win.ps1
+  Content-Type: text/plain; charset=utf-8
+  Access-Control-Allow-Origin: *

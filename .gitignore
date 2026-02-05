@@ -18,3 +18,13 @@
 # Temp
 *.tmp
 *.temp
+.yarn
+
+# Dependencies
+node_modules/
+
+# Cloudflare
+.wrangler/
+
+# Build output
+.dist/
