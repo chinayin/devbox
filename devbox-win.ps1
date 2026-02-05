@@ -282,19 +282,22 @@ function Install-Scoop {
     
     Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
     
-    if ($script:SCOOP_MIRROR) {
-        $env:SCOOP_REPO = "$script:SCOOP_MIRROR/scoop"
-        $installScript = Invoke-RestMethod "$script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1"
-    } else {
-        $installScript = Invoke-RestMethod -Uri https://get.scoop.sh
-    }
-    
     # Auto-detect admin and pass -RunAsAdmin to install script
     if ($script:IsAdmin) {
         Write-Info "Admin detected, installing globally"
-        Invoke-Expression "& { $installScript } -RunAsAdmin"
+        if ($script:SCOOP_MIRROR) {
+            $env:SCOOP_REPO = "$script:SCOOP_MIRROR/scoop"
+            iex "& {$(irm $script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1)} -RunAsAdmin"
+        } else {
+            iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+        }
     } else {
-        Invoke-Expression "& { $installScript }"
+        if ($script:SCOOP_MIRROR) {
+            $env:SCOOP_REPO = "$script:SCOOP_MIRROR/scoop"
+            irm "$script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1" | iex
+        } else {
+            irm get.scoop.sh | iex
+        }
     }
     
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
