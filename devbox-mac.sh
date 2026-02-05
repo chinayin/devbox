@@ -72,6 +72,24 @@ append_if_missing() {
     grep -q "$marker" "$file" 2>/dev/null || echo "$content" >> "$file"
 }
 
+get_system_proxy() {
+    # 检查环境变量 (终端代理)
+    if [[ -n "$HTTPS_PROXY" ]]; then
+        echo "HTTPS_PROXY|$HTTPS_PROXY"
+        return 0
+    fi
+    if [[ -n "$HTTP_PROXY" ]]; then
+        echo "HTTP_PROXY|$HTTP_PROXY"
+        return 0
+    fi
+    if [[ -n "$ALL_PROXY" ]]; then
+        echo "ALL_PROXY|$ALL_PROXY"
+        return 0
+    fi
+    # macOS 系统代理不会自动被终端读取，所以只检测环境变量
+    return 1
+}
+
 #===========================================
 # 镜像配置
 #===========================================
@@ -141,6 +159,14 @@ cmd_status() {
     echo "  芯片       $(uname -m)"
     echo "  Shell      $(basename $SHELL)"
     echo "  配置文件   $(get_shell_rc)"
+    
+    # 显示代理信息
+    local proxy_info=$(get_system_proxy)
+    if [[ -n "$proxy_info" ]]; then
+        local proxy_source=$(echo "$proxy_info" | cut -d'|' -f1)
+        local proxy_value=$(echo "$proxy_info" | cut -d'|' -f2)
+        printf "  Proxy      ${GREEN}%s${NC} ${GRAY}(%s)${NC}\n" "$proxy_value" "$proxy_source"
+    fi
 
     section "基础工具"
     if has brew; then
@@ -393,6 +419,17 @@ cmd_install() {
     fi
     
     show_header "install - 环境安装 [$region]"
+    
+    # 检测代理并提示
+    local proxy_info=$(get_system_proxy)
+    if [[ -n "$proxy_info" ]]; then
+        local proxy_source=$(echo "$proxy_info" | cut -d'|' -f1)
+        local proxy_value=$(echo "$proxy_info" | cut -d'|' -f2)
+        info "检测到代理: $proxy_value ($proxy_source)"
+        if $USE_CHINA_MIRROR; then
+            warn "已有代理,可能不需要 --china 镜像"
+        fi
+    fi
     
     install_homebrew
     save_homebrew_mirror

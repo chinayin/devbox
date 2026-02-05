@@ -105,6 +105,21 @@ function Add-ToProfile {
     }
 }
 
+function Get-SystemProxy {
+    # 1. 检查环境变量
+    if ($env:HTTPS_PROXY) { return @{ Source = "HTTPS_PROXY"; Value = $env:HTTPS_PROXY } }
+    if ($env:HTTP_PROXY) { return @{ Source = "HTTP_PROXY"; Value = $env:HTTP_PROXY } }
+    if ($env:ALL_PROXY) { return @{ Source = "ALL_PROXY"; Value = $env:ALL_PROXY } }
+    
+    # 2. 检查 Windows 系统代理
+    $reg = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
+    if ($reg.ProxyEnable -eq 1 -and $reg.ProxyServer) {
+        return @{ Source = "系统代理"; Value = $reg.ProxyServer }
+    }
+    
+    return $null
+}
+
 #===========================================
 # 镜像配置
 #===========================================
@@ -163,6 +178,14 @@ function Invoke-Status {
     Write-Host "  架构       $env:PROCESSOR_ARCHITECTURE"
     Write-Host "  PowerShell $($PSVersionTable.PSVersion)"
     Write-Host "  配置文件   $(Get-ProfilePath)"
+    
+    # 显示代理信息
+    $proxy = Get-SystemProxy
+    if ($proxy) {
+        Write-Host "  Proxy      " -NoNewline
+        Write-Host "$($proxy.Value)" -ForegroundColor Green -NoNewline
+        Write-Host " ($($proxy.Source))" -ForegroundColor Gray
+    }
     
     Write-Section "基础工具"
     if (Test-Command scoop) {
@@ -281,22 +304,19 @@ function Install-Git {
 function Save-ScoopMirror {
     Write-Step "配置 Scoop bucket"
     
-    # 检查 main bucket 是否已存在
-    $buckets = scoop bucket list 2>$null
-    if ($buckets -match 'main') {
-        Write-Info "main bucket 已存在"
-        return
-    }
-    
     if ($script:SCOOP_MIRROR) {
+        # 配置 Scoop 仓库镜像
         scoop config SCOOP_REPO "$script:SCOOP_MIRROR/scoop"
         
         # 临时禁用 Git 交互式认证 (仅影响当前命令)
         $env:GIT_TERMINAL_PROMPT = "0"
         
+        # 移除现有的 main bucket (可能是官方源)
+        scoop bucket rm main 2>$null
+        
         scoop update 2>$null
         
-        # 尝试添加镜像 bucket (注意: Gitee 上是大写 Main)
+        # 添加镜像 bucket (注意: Gitee 上是大写 Main)
         $output = scoop bucket add main "$script:SCOOP_MIRROR/Main" 2>&1
         
         # 恢复环境变量
@@ -308,6 +328,13 @@ function Save-ScoopMirror {
         }
         Write-Warn "Gitee 镜像不可用,回退到官方源"
         scoop bucket rm main 2>$null
+    }
+    
+    # 检查 main bucket 是否已存在 (非镜像模式)
+    $buckets = scoop bucket list 2>$null
+    if ($buckets -match 'main') {
+        Write-Info "main bucket 已存在"
+        return
     }
     
     # 使用官方 bucket
@@ -463,6 +490,15 @@ function Invoke-Install {
     }
     
     Write-Header "install - 环境安装 [$region]"
+    
+    # 检测代理并提示
+    $proxy = Get-SystemProxy
+    if ($proxy) {
+        Write-Info "检测到代理: $($proxy.Value) ($($proxy.Source))"
+        if ($China) {
+            Write-Warn "已有代理,可能不需要 -China 镜像"
+        }
+    }
     
     Install-Scoop
     Install-Git
