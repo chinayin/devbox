@@ -26,7 +26,8 @@ param(
     [switch]$Go,
     [string]$GoVersion,
     [switch]$Rust,
-    [switch]$ScoopOnly
+    [switch]$ScoopOnly,
+    [switch]$NoAria2
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,14 +50,12 @@ $script:VERSION = "v0.1"
 $script:PROJECT_URL = "https://github.com/chinayin/devbox"
 
 # Mirror configuration
-$script:SCOOP_MIRROR = ""
 $script:PIP_MIRROR = "https://pypi.org/simple"
 $script:NPM_MIRROR = "https://registry.npmjs.org"
 $script:GO_PROXY = ""
 $script:RUST_MIRROR = ""
 
 # China mirrors
-$script:CN_SCOOP_MIRROR = "https://gitee.com/scoop-installer"
 $script:CN_PIP_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
 $script:CN_NPM_MIRROR = "https://registry.npmmirror.com"
 $script:CN_GO_PROXY = "https://goproxy.cn,direct"
@@ -101,18 +100,6 @@ function Get-ProfilePath {
     return "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
 }
 
-function Add-ToProfile {
-    param([string]$Content, [string]$Marker)
-    $profilePath = Get-ProfilePath
-    $profileDir = Split-Path $profilePath -Parent
-    if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
-    if (-not (Test-Path $profilePath)) { New-Item -ItemType File -Path $profilePath -Force | Out-Null }
-    $existing = Get-Content $profilePath -Raw -ErrorAction SilentlyContinue
-    if ($existing -notmatch [regex]::Escape($Marker)) {
-        Add-Content -Path $profilePath -Value $Content
-    }
-}
-
 function Get-SystemProxy {
     if ($env:HTTPS_PROXY) { return @{ Source = "HTTPS_PROXY"; Value = $env:HTTPS_PROXY } }
     if ($env:HTTP_PROXY) { return @{ Source = "HTTP_PROXY"; Value = $env:HTTP_PROXY } }
@@ -134,7 +121,6 @@ function Get-AdminStatus {
 # Mirror Configuration
 #===========================================
 function Set-ChinaMirror {
-    $script:SCOOP_MIRROR = $script:CN_SCOOP_MIRROR
     $script:PIP_MIRROR = $script:CN_PIP_MIRROR
     $script:NPM_MIRROR = $script:CN_NPM_MIRROR
     $script:GO_PROXY = $script:CN_GO_PROXY
@@ -157,8 +143,9 @@ Commands:
   help        Show this help
 
 Install Options:
-  -China, -c          Use China mirrors (Tsinghua/Taobao/Gitee)
+  -China, -c          Use China mirrors (Tsinghua/Taobao)
   -ScoopOnly          Only install Scoop
+  -NoAria2            Disable aria2 (enabled by default for faster downloads)
   -VibeCoding         Install AI coding environment (Python + Node.js)
   -Python             Install Python
   -PythonVersion      Specify Python version (e.g. 3.12)
@@ -172,7 +159,10 @@ Examples:
   .\devbox-win.ps1 status                           # Check environment
   .\devbox-win.ps1 install -China -VibeCoding       # AI coding (recommended)
   .\devbox-win.ps1 install -China -Python -NodeJS   # Install Python + Node.js
-  .\devbox-win.ps1 install -ScoopOnly -China        # Only install Scoop
+  .\devbox-win.ps1 install -Python -PythonVersion 3.12   # Install Python 3.12
+  .\devbox-win.ps1 install -NodeJS -NodeJSVersion 20     # Install Node.js 20
+  .\devbox-win.ps1 install -ScoopOnly               # Only install Scoop
+  .\devbox-win.ps1 install -VibeCoding -NoAria2     # Without aria2
 "@
 }
 
@@ -202,11 +192,14 @@ function Invoke-Status {
         $scoopVer = (scoop --version 2>$null | Select-Object -First 1) -replace 'v', ''
         Write-Info "Scoop $scoopVer"
         Write-Dim "    Path: $(Get-Command scoop | Select-Object -ExpandProperty Source)"
-        $scoopConfig = scoop config 2>$null
-        if ($scoopConfig -match 'SCOOP_REPO') {
-            Write-Dim "    Mirror: Configured"
-        } else {
-            Write-Dim "    Mirror: Official"
+        # Check aria2 status
+        if (Test-Command aria2c) {
+            $aria2Enabled = scoop config aria2-enabled 2>$null
+            if ($aria2Enabled -match 'True') {
+                Write-Dim "    aria2: Enabled"
+            } else {
+                Write-Dim "    aria2: Installed but disabled"
+            }
         }
     } else {
         Write-Fail "Scoop not installed"
@@ -308,40 +301,20 @@ function Install-Git {
     Write-Info "Git installed"
 }
 
-function Save-ScoopMirror {
-    Write-Step "Configuring Scoop bucket"
+function Install-Aria2 {
+    Write-Step "Enabling aria2 (multi-threaded download)"
     
-    if ($script:SCOOP_MIRROR) {
-        scoop config SCOOP_REPO "$script:SCOOP_MIRROR/scoop"
-        
-        $env:GIT_TERMINAL_PROMPT = "0"
-        
-        scoop bucket rm main 2>$null
-        scoop update 2>$null
-        scoop bucket add main "$script:SCOOP_MIRROR/Main" 2>$null
-        
-        Remove-Item Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue
-        
-        $buckets = scoop bucket list 2>$null
-        if ($buckets -match 'main') {
-            Write-Info "Scoop mirror configured (Gitee)"
+    if (-not (Test-Command aria2c)) {
+        scoop install aria2
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Failed to install aria2, skipping"
             return
         }
-        
-        Write-Warn "Gitee mirror unavailable, falling back to official"
     }
     
-    $buckets = scoop bucket list 2>$null
-    if ($buckets -match 'main') {
-        Write-Info "main bucket exists"
-        return
-    }
-    
-    scoop bucket add main
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to add Scoop main bucket"
-    }
-    Write-Info "Scoop main bucket configured"
+    scoop config aria2-enabled true
+    scoop config aria2-warning-enabled false
+    Write-Info "aria2 enabled"
 }
 
 function Install-Python {
@@ -408,6 +381,7 @@ function Install-Go {
     Write-Step "Installing Go"
     
     $pkg = "go"
+    if ($GoVersion) { $pkg = "go@$GoVersion" }
     
     if (Test-Command go) {
         $goVer = go version
@@ -491,8 +465,8 @@ function Invoke-Install {
     }
     
     Install-Scoop
+    if (-not $NoAria2) { Install-Aria2 }
     Install-Git
-    Save-ScoopMirror
     
     if ($ScoopOnly) {
         Write-Host ""
