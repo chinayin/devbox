@@ -32,6 +32,17 @@ param(
 $ErrorActionPreference = 'Stop'
 
 #===========================================
+# Admin Detection
+#===========================================
+function Test-IsAdmin {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+$script:IsAdmin = Test-IsAdmin
+
+#===========================================
 # Configuration
 #===========================================
 $script:VERSION = "v0.1"
@@ -114,6 +125,11 @@ function Get-SystemProxy {
     return $null
 }
 
+function Get-AdminStatus {
+    if ($script:IsAdmin) { return "Admin" }
+    return "User"
+}
+
 #===========================================
 # Mirror Configuration
 #===========================================
@@ -172,6 +188,7 @@ function Invoke-Status {
     Write-Host "  Arch       $env:PROCESSOR_ARCHITECTURE"
     Write-Host "  PowerShell $($PSVersionTable.PSVersion)"
     Write-Host "  Profile    $(Get-ProfilePath)"
+    Write-Host "  Mode       $(Get-AdminStatus)"
     
     $proxy = Get-SystemProxy
     if ($proxy) {
@@ -267,9 +284,17 @@ function Install-Scoop {
     
     if ($script:SCOOP_MIRROR) {
         $env:SCOOP_REPO = "$script:SCOOP_MIRROR/scoop"
-        Invoke-RestMethod "$script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1" | Invoke-Expression
+        $installScript = Invoke-RestMethod "$script:SCOOP_MIRROR/scoop/raw/master/bin/install.ps1"
     } else {
-        Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+        $installScript = Invoke-RestMethod -Uri https://get.scoop.sh
+    }
+    
+    # Auto-detect admin and pass -RunAsAdmin to install script
+    if ($script:IsAdmin) {
+        Write-Info "Admin detected, installing globally"
+        Invoke-Expression "& { $installScript } -RunAsAdmin"
+    } else {
+        Invoke-Expression "& { $installScript }"
     }
     
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
