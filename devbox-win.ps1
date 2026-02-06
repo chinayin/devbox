@@ -26,6 +26,9 @@ param(
     [switch]$Go,
     [string]$GoVersion,
     [switch]$Rust,
+    [switch]$Kiro,
+    [switch]$Cursor,
+    [switch]$VSCode,
     [switch]$ScoopOnly,
     [switch]$NoAria2
 )
@@ -133,7 +136,7 @@ function Set-ChinaMirror {
 function Show-Help {
     @"
 Devbox $script:VERSION
-Windows Development Environment Setup | $script:PROJECT_URL
+Windows 一行命令搞定 AI 编程环境 | $script:PROJECT_URL
 
 Usage: .\devbox-win.ps1 <command> [options]
 
@@ -154,15 +157,17 @@ Install Options:
   -Go                 Install Go
   -GoVersion          Specify Go version
   -Rust               Install Rust
+  -Kiro               Install Kiro (AI IDE) - manual download
+  -Cursor             Install Cursor (AI IDE)
+  -VSCode             Install VS Code
 
 Examples:
   .\devbox-win.ps1 status                           # Check environment
   .\devbox-win.ps1 install -China -VibeCoding       # AI coding (recommended)
   .\devbox-win.ps1 install -China -Python -NodeJS   # Install Python + Node.js
   .\devbox-win.ps1 install -Python -PythonVersion 3.12   # Install Python 3.12
-  .\devbox-win.ps1 install -NodeJS -NodeJSVersion 20     # Install Node.js 20
   .\devbox-win.ps1 install -ScoopOnly               # Only install Scoop
-  .\devbox-win.ps1 install -VibeCoding -NoAria2     # Without aria2
+  .\devbox-win.ps1 install -China -Cursor           # Install Cursor
 "@
 }
 
@@ -257,6 +262,40 @@ function Invoke-Status {
         Write-Dim "  Rust not installed"
     }
     
+    Write-Section "Dev Tools"
+    # Kiro
+    $kiroPath = "$env:LOCALAPPDATA\Programs\Kiro\Kiro.exe"
+    if (Test-Path $kiroPath) {
+        Write-Info "Kiro"
+        Write-Dim "    Path: $kiroPath"
+    } else {
+        Write-Dim "  Kiro not installed"
+    }
+    
+    # Cursor
+    $cursorPath = "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe"
+    if (Test-Path $cursorPath) {
+        Write-Info "Cursor"
+        Write-Dim "    Path: $cursorPath"
+    } elseif (Test-Command cursor) {
+        Write-Info "Cursor (scoop)"
+        Write-Dim "    Path: $(Get-Command cursor | Select-Object -ExpandProperty Source)"
+    } else {
+        Write-Dim "  Cursor not installed"
+    }
+    
+    # VS Code
+    $vscodePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
+    if (Test-Path $vscodePath) {
+        Write-Info "VS Code"
+        Write-Dim "    Path: $vscodePath"
+    } elseif (Test-Command code) {
+        Write-Info "VS Code (scoop)"
+        Write-Dim "    Path: $(Get-Command code | Select-Object -ExpandProperty Source)"
+    } else {
+        Write-Dim "  VS Code not installed"
+    }
+    
     Write-Host ""
 }
 
@@ -271,7 +310,26 @@ function Install-Scoop {
         return
     }
     
-    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+    # 检查并设置 ExecutionPolicy
+    Write-Step "Checking ExecutionPolicy"
+    $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+    if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
+        try {
+            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+            Write-Info "ExecutionPolicy set to RemoteSigned"
+        } catch {
+            Write-Fail "Failed to set ExecutionPolicy"
+            Write-Host ""
+            Write-Host "Please run this command manually first:" -ForegroundColor Yellow
+            Write-Host "  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "If that fails, your organization may have restricted this." -ForegroundColor Gray
+            Write-Host "Try running PowerShell as Administrator, or contact your IT admin." -ForegroundColor Gray
+            throw "ExecutionPolicy configuration required"
+        }
+    } else {
+        Write-Info "ExecutionPolicy OK ($currentPolicy)"
+    }
     
     # Always use official installer (mirror installer may be outdated)
     if ($script:IsAdmin) {
@@ -436,6 +494,73 @@ registry = "$mirror/crates.io-index"
     }
 }
 
+function Install-Kiro {
+    Write-Step "Installing Kiro"
+    
+    $kiroPath = "$env:LOCALAPPDATA\Programs\Kiro\Kiro.exe"
+    if (Test-Path $kiroPath) {
+        Write-Info "Kiro already installed"
+        return
+    }
+    
+    # Kiro 目前不在 scoop 中，提示手动下载
+    Write-Warn "Kiro is not available in Scoop"
+    Write-Host ""
+    Write-Host "  Please download Kiro manually from:" -ForegroundColor Yellow
+    Write-Host "  https://kiro.dev/download" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Install-Cursor {
+    Write-Step "Installing Cursor"
+    
+    $cursorPath = "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe"
+    if (Test-Path $cursorPath) {
+        Write-Info "Cursor already installed"
+        return
+    }
+    
+    if (Test-Command cursor) {
+        Write-Info "Cursor already installed (scoop)"
+        return
+    }
+    
+    # 添加 extras bucket
+    $buckets = scoop bucket list 2>$null
+    if ($buckets -notmatch 'extras') {
+        Write-Step "Adding scoop extras bucket"
+        scoop bucket add extras
+    }
+    
+    scoop install extras/cursor
+    Write-Info "Cursor installed"
+}
+
+function Install-VSCode {
+    Write-Step "Installing VS Code"
+    
+    $vscodePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
+    if (Test-Path $vscodePath) {
+        Write-Info "VS Code already installed"
+        return
+    }
+    
+    if (Test-Command code) {
+        Write-Info "VS Code already installed (scoop)"
+        return
+    }
+    
+    # 添加 extras bucket
+    $buckets = scoop bucket list 2>$null
+    if ($buckets -notmatch 'extras') {
+        Write-Step "Adding scoop extras bucket"
+        scoop bucket add extras
+    }
+    
+    scoop install extras/vscode
+    Write-Info "VS Code installed"
+}
+
 #===========================================
 # Command: install
 #===========================================
@@ -477,6 +602,9 @@ function Invoke-Install {
     if ($NodeJS -or $NodeJSVersion) { Install-NodeJS }
     if ($Go -or $GoVersion) { Install-Go }
     if ($Rust) { Install-Rust }
+    if ($Kiro) { Install-Kiro }
+    if ($Cursor) { Install-Cursor }
+    if ($VSCode) { Install-VSCode }
     
     Write-Host ""
     Write-Host "----------------------------------------"
@@ -487,6 +615,8 @@ function Invoke-Install {
     if ($NodeJS -and (Test-Command node)) { Write-Host "  Node.js   $(node --version)" }
     if ($Go -and (Test-Command go)) { Write-Host "  Go        $((go version) -replace 'go version go', '' -replace ' .*', '')" }
     if ($Rust -and (Test-Command rustc)) { Write-Host "  Rust      $((rustc --version) -replace 'rustc ', '' -replace ' .*', '')" }
+    if ($Cursor -and (Test-Command cursor)) { Write-Host "  Cursor    installed" }
+    if ($VSCode -and (Test-Command code)) { Write-Host "  VS Code   installed" }
     Write-Host ""
     Write-Warn "Restart PowerShell to take effect"
 }

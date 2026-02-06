@@ -128,6 +128,9 @@ install 选项:
   --nodejs[=版本]   安装 Node.js (如 --nodejs=24)
   --go[=版本]       安装 Go (如 --go=1.25)
   --rust            安装 Rust
+  --kiro            安装 Kiro (AI IDE)
+  --cursor          安装 Cursor (AI IDE)
+  --vscode          安装 VS Code
 
 通用选项:
   -h, --help        显示帮助信息
@@ -139,6 +142,7 @@ install 选项:
   ./devbox-mac.sh install --china --python --nodejs  # 安装 Python + Node.js
   ./devbox-mac.sh install --china --python=3.12      # 指定 Python 版本
   ./devbox-mac.sh install --brew-only --china        # 只装 Homebrew
+  ./devbox-mac.sh install --china --kiro             # 安装 Kiro
 EOF
     exit 0
 }
@@ -232,6 +236,32 @@ cmd_status() {
     else
         dim "  Rust 未安装"
     fi
+
+    section "开发工具"
+    # Kiro
+    if [[ -d "/Applications/Kiro.app" ]]; then
+        info "Kiro"
+        dim "    └─ 路径: /Applications/Kiro.app"
+    else
+        dim "  Kiro 未安装"
+    fi
+    
+    # Cursor
+    if [[ -d "/Applications/Cursor.app" ]]; then
+        info "Cursor"
+        dim "    └─ 路径: /Applications/Cursor.app"
+    else
+        dim "  Cursor 未安装"
+    fi
+    
+    # VS Code
+    if [[ -d "/Applications/Visual Studio Code.app" ]]; then
+        info "VS Code"
+        dim "    └─ 路径: /Applications/Visual Studio Code.app"
+    else
+        dim "  VS Code 未安装"
+    fi
+    
     echo ""
 }
 
@@ -244,6 +274,9 @@ INSTALL_PYTHON=false
 INSTALL_NODEJS=false
 INSTALL_GO=false
 INSTALL_RUST=false
+INSTALL_KIRO=false
+INSTALL_CURSOR=false
+INSTALL_VSCODE=false
 PYTHON_VERSION=""
 NODEJS_VERSION=""
 GO_VERSION=""
@@ -261,6 +294,9 @@ parse_install_args() {
             --go=*)          INSTALL_GO=true; GO_VERSION="${arg#*=}" ;;
             --go)            INSTALL_GO=true ;;
             --rust)          INSTALL_RUST=true ;;
+            --kiro)          INSTALL_KIRO=true ;;
+            --cursor)        INSTALL_CURSOR=true ;;
+            --vscode)        INSTALL_VSCODE=true ;;
         esac
     done
 }
@@ -407,6 +443,57 @@ EOF
     fi
 }
 
+install_kiro() {
+    step "安装 Kiro"
+    
+    if [[ -d "/Applications/Kiro.app" ]]; then
+        info "Kiro 已安装"
+        return 0
+    fi
+    
+    # 使用 brew cask 安装
+    if brew list --cask kiro &>/dev/null 2>&1; then
+        info "Kiro 已安装"
+    else
+        brew install --cask kiro
+        info "Kiro 安装完成"
+    fi
+}
+
+install_cursor() {
+    step "安装 Cursor"
+    
+    if [[ -d "/Applications/Cursor.app" ]]; then
+        info "Cursor 已安装"
+        return 0
+    fi
+    
+    # 使用 brew cask 安装
+    if brew list --cask cursor &>/dev/null 2>&1; then
+        info "Cursor 已安装"
+    else
+        brew install --cask cursor
+        info "Cursor 安装完成"
+    fi
+}
+
+install_vscode() {
+    step "安装 VS Code"
+    
+    if [[ -d "/Applications/Visual Studio Code.app" ]]; then
+        info "VS Code 已安装"
+        return 0
+    fi
+    
+    # 使用 brew cask 安装
+    if brew list --cask visual-studio-code &>/dev/null 2>&1; then
+        info "VS Code 已安装"
+    else
+        brew install --cask visual-studio-code
+        info "VS Code 安装完成"
+    fi
+}
+
 cmd_install() {
     parse_install_args "$@"
     
@@ -445,6 +532,9 @@ cmd_install() {
     $INSTALL_NODEJS && install_nodejs
     $INSTALL_GO && install_go
     $INSTALL_RUST && install_rust
+    $INSTALL_KIRO && install_kiro
+    $INSTALL_CURSOR && install_cursor
+    $INSTALL_VSCODE && install_vscode
     
     echo ""
     echo "────────────────────────────────────────"
@@ -456,6 +546,9 @@ cmd_install() {
     $INSTALL_NODEJS && echo "  Node.js   $(node --version 2>/dev/null)"
     $INSTALL_GO && echo "  Go        $(go version 2>/dev/null | awk '{print $3}')"
     $INSTALL_RUST && echo "  Rust      $(rustc --version 2>/dev/null | awk '{print $2}')"
+    $INSTALL_KIRO && echo "  Kiro      ✓"
+    $INSTALL_CURSOR && echo "  Cursor    ✓"
+    $INSTALL_VSCODE && echo "  VS Code   ✓"
     echo ""
     warn "运行 source $(get_shell_rc) 或重开终端生效"
 }
