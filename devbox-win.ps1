@@ -46,7 +46,7 @@ $script:IsAdmin = Test-IsAdmin
 #===========================================
 # Configuration
 #===========================================
-$script:VERSION = "v0.1"
+$script:VERSION = "v1.0"
 $script:PROJECT_URL = "https://github.com/chinayin/devbox"
 
 # Mirror configuration

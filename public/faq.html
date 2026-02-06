@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>常见问题 - Devbox</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        .back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #8892b0;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 32px;
+            transition: color 0.2s;
+        }
+        .back:hover { color: #ff5a5f; }
+        .back svg { width: 18px; height: 18px; fill: currentColor; }
+        
+        .title {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ff5a5f, #ff8a5b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 40px;
+        }
+
+        .faq-item {
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .faq-question {
+            padding: 18px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 500;
+            color: #ccd6f6;
+            transition: background 0.2s;
+        }
+        .faq-question:hover {
+            background: rgba(255,255,255,0.03);
+        }
+        .faq-question svg {
+            width: 20px;
+            height: 20px;
+            fill: #8892b0;
+            transition: transform 0.3s;
+            flex-shrink: 0;
+        }
+        .faq-item.open .faq-question svg {
+            transform: rotate(180deg);
+        }
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .faq-item.open .faq-answer {
+            max-height: 500px;
+        }
+        .faq-answer-inner {
+            padding: 0 20px 20px;
+            color: #8892b0;
+            line-height: 1.7;
+            font-size: 0.95rem;
+        }
+        .faq-answer-inner code {
+            background: rgba(255,90,95,0.15);
+            color: #ff8a5b;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: "SF Mono", Monaco, Consolas, monospace;
+            font-size: 0.85rem;
+        }
+        .faq-answer-inner pre {
+            background: #0a0a0f;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin: 12px 0;
+            overflow-x: auto;
+            font-family: "SF Mono", Monaco, Consolas, monospace;
+            font-size: 0.85rem;
+            color: #a8b2d1;
+        }
+        .faq-answer-inner a {
+            color: #ff5a5f;
+            text-decoration: none;
+        }
+        .faq-answer-inner a:hover {
+            text-decoration: underline;
+        }
+
+        .section-title {
+            color: #ff8a5b;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 40px 0 16px;
+        }
+        .section-title:first-of-type {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back">
+            <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            返回首页
+        </a>
+        
+        <h1 class="title">常见问题</h1>
+
+        <div class="section-title">macOS</div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                安装后命令找不到？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    安装完成后需要重新加载配置。运行以下命令，或者直接重新打开终端：
+                    <pre>source ~/.zshrc</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                安装时需要输入密码？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    安装 Homebrew 和 Xcode 命令行工具时需要管理员密码，这是正常的。输入你的 Mac 登录密码即可（输入时不会显示字符）。
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                提示 "xcrun: error: invalid active developer path"？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    需要安装 Xcode 命令行工具。运行：
+                    <pre>xcode-select --install</pre>
+                    在弹出的窗口中点击「安装」，等待完成后重新运行脚本。
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">Windows</div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                提示脚本无法运行？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Windows 默认禁止运行脚本。打开 PowerShell，执行以下命令允许运行：
+                    <pre>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser</pre>
+                    然后重新运行安装命令。
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                需要管理员权限吗？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    不需要。Scoop 安装在用户目录下，无需管理员权限。如果你以管理员身份运行，脚本会自动检测并全局安装。
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                Python 显示 "Microsoft Store" 版本？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Windows 会将 <code>python</code> 命令重定向到 Microsoft Store。脚本会自动安装真正的 Python 并覆盖这个行为。如果仍有问题，重新打开 PowerShell 即可。
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">通用</div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                国内用户需要使用 --china 吗？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    如果你没有代理，强烈建议使用 <code>--china</code> 参数。它会自动配置清华、淘宝等国内镜像源，下载速度会快很多。<br><br>
+                    如果你已经有代理（科学上网），可以不加这个参数。
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                如何检查安装状态？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    运行 <code>status</code> 命令查看当前环境：
+                    <pre># macOS
+./devbox-mac.sh status
+
+# Windows
+.\devbox-win.ps1 status</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <div class="faq-question">
+                遇到其他问题？
+                <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+            </div>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    欢迎在 <a href="https://github.com/chinayin/devbox/issues" target="_blank">GitHub Issues</a> 提交问题，我们会尽快回复。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelectorAll('.faq-item').forEach(item => {
+            item.querySelector('.faq-question').addEventListener('click', () => {
+                item.classList.toggle('open');
+            });
+        });
+    </script>
+</body>
+</html>

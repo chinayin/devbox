@@ -1,6 +1,6 @@
 {
   "name": "devbox",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "rm -rf .dist && mkdir -p .dist && cp -r public/* .dist/ && cp devbox-mac.sh devbox-win.ps1 .dist/",

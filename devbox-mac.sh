@@ -7,7 +7,7 @@
 
 set -e
 
-VERSION="v0.1"
+VERSION="v1.0"
 PROJECT_URL="https://github.com/chinayin/devbox"
 
 #===========================================
@@ -112,7 +112,7 @@ setup_china_mirror() {
 show_help() {
     cat << EOF
 Devbox ${VERSION}
-Mac 开发环境初始化脚本 | ${PROJECT_URL}
+Mac 一行命令搞定 AI 编程环境 | ${PROJECT_URL}
 
 用法: ./devbox-mac.sh <命令> [选项]
 
