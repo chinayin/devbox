@@ -128,6 +128,7 @@ install 选项:
   --nodejs[=版本]   安装 Node.js (如 --nodejs=24)
   --go[=版本]       安装 Go (如 --go=1.25)
   --rust            安装 Rust
+  --cmake           安装 CMake (node-llama-cpp 等需要)
   --kiro            安装 Kiro (AI IDE)
   --cursor          安装 Cursor (AI IDE)
   --vscode          安装 VS Code
@@ -197,6 +198,14 @@ cmd_status() {
         fail "Xcode CLI Tools 未安装"
     fi
 
+    if has git; then
+        local git_ver=$(git --version | awk '{print $3}')
+        info "Git ${git_ver}"
+        dim "    └─ 路径: $(which git)"
+    else
+        fail "Git 未安装"
+    fi
+
     section "编程语言"
     if has python3; then
         info "Python $(python3 --version | awk '{print $2}')"
@@ -237,6 +246,15 @@ cmd_status() {
         dim "  Rust 未安装"
     fi
 
+    section "构建工具"
+    if has cmake; then
+        local cmake_ver=$(cmake --version | head -1 | awk '{print $3}')
+        info "CMake ${cmake_ver}"
+        dim "    └─ 路径: $(which cmake)"
+    else
+        dim "  CMake 未安装"
+    fi
+
     section "开发工具"
     # Kiro
     if [[ -d "/Applications/Kiro.app" ]]; then
@@ -274,6 +292,7 @@ INSTALL_PYTHON=false
 INSTALL_NODEJS=false
 INSTALL_GO=false
 INSTALL_RUST=false
+INSTALL_CMAKE=false
 INSTALL_KIRO=false
 INSTALL_CURSOR=false
 INSTALL_VSCODE=false
@@ -286,7 +305,7 @@ parse_install_args() {
         case $arg in
             --china|-c)      USE_CHINA_MIRROR=true ;;
             --brew-only)     BREW_ONLY=true ;;
-            --vibecoding)    INSTALL_PYTHON=true; INSTALL_NODEJS=true ;;
+            --vibecoding)    INSTALL_PYTHON=true; INSTALL_NODEJS=true; INSTALL_CMAKE=true ;;
             --python=*)      INSTALL_PYTHON=true; PYTHON_VERSION="${arg#*=}" ;;
             --python)        INSTALL_PYTHON=true ;;
             --nodejs=*)      INSTALL_NODEJS=true; NODEJS_VERSION="${arg#*=}" ;;
@@ -294,6 +313,7 @@ parse_install_args() {
             --go=*)          INSTALL_GO=true; GO_VERSION="${arg#*=}" ;;
             --go)            INSTALL_GO=true ;;
             --rust)          INSTALL_RUST=true ;;
+            --cmake)         INSTALL_CMAKE=true ;;
             --kiro)          INSTALL_KIRO=true ;;
             --cursor)        INSTALL_CURSOR=true ;;
             --vscode)        INSTALL_VSCODE=true ;;
@@ -338,6 +358,19 @@ install_homebrew() {
     fi
     
     info "Homebrew 安装完成"
+}
+
+install_git() {
+    step "安装 Git"
+    
+    if has git; then
+        local git_ver=$(git --version | awk '{print $3}')
+        info "Git 已安装 (${git_ver})"
+        return 0
+    fi
+    
+    brew install git
+    info "Git 安装完成 ($(git --version | awk '{print $3}'))"
 }
 
 save_homebrew_mirror() {
@@ -412,6 +445,19 @@ install_go() {
         go env -w GOPROXY="$GO_PROXY"
         info "GOPROXY → $GO_PROXY"
     fi
+}
+
+install_cmake() {
+    step "安装 CMake"
+    
+    if has cmake; then
+        local cmake_ver=$(cmake --version | head -1 | awk '{print $3}')
+        info "CMake 已安装 (${cmake_ver})"
+        return 0
+    fi
+    
+    brew install cmake
+    info "CMake 安装完成 ($(cmake --version | head -1 | awk '{print $3}'))"
 }
 
 install_rust() {
@@ -520,6 +566,7 @@ cmd_install() {
     
     install_homebrew
     save_homebrew_mirror
+    install_git
     
     if $BREW_ONLY; then
         echo ""
@@ -530,6 +577,7 @@ cmd_install() {
     
     $INSTALL_PYTHON && install_python
     $INSTALL_NODEJS && install_nodejs
+    $INSTALL_CMAKE && install_cmake
     $INSTALL_GO && install_go
     $INSTALL_RUST && install_rust
     $INSTALL_KIRO && install_kiro
@@ -544,6 +592,7 @@ cmd_install() {
     echo "  Homebrew  ${brew_ver}"
     $INSTALL_PYTHON && echo "  Python    $(python3 --version 2>/dev/null | awk '{print $2}')"
     $INSTALL_NODEJS && echo "  Node.js   $(node --version 2>/dev/null)"
+    $INSTALL_CMAKE && echo "  CMake     $(cmake --version 2>/dev/null | head -1 | awk '{print $3}')"
     $INSTALL_GO && echo "  Go        $(go version 2>/dev/null | awk '{print $3}')"
     $INSTALL_RUST && echo "  Rust      $(rustc --version 2>/dev/null | awk '{print $2}')"
     $INSTALL_KIRO && echo "  Kiro      ✓"
