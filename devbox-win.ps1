@@ -584,12 +584,12 @@ function Set-ScoopProxy {
             Write-Info "Scoop proxy -> $($proxy.Value) (session only)"
             return $true
         }
+        return $false
     }
     if ($Disable) {
         scoop config rm proxy
         Write-Dim "    Scoop session proxy removed"
     }
-    return $false
 }
 
 function Ensure-ExtrasBucket {
