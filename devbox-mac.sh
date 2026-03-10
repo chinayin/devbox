@@ -5,9 +5,7 @@
 # 协议: MIT
 #
 
-set -e
-
-VERSION="v1.0"
+VERSION="v1.1"
 PROJECT_URL="https://github.com/chinayin/devbox"
 
 #===========================================
@@ -15,20 +13,37 @@ PROJECT_URL="https://github.com/chinayin/devbox"
 #===========================================
 BREW_MIRROR=""
 BREW_BOTTLE_MIRROR=""
-PIP_MIRROR="https://pypi.org/simple"
-NPM_MIRROR="https://registry.npmjs.org"
+PIP_MIRROR=""
+NPM_MIRROR=""
 GO_PROXY=""
 RUST_MIRROR=""
 
 # 中国镜像源
 CN_BREW_MIRROR="https://mirrors.tuna.tsinghua.edu.cn"
 CN_BREW_BOTTLE="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
+CN_BREW_INSTALL_SCRIPT="https://mirrors.ustc.edu.cn/misc/brew-install.sh"
 CN_PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 CN_NPM_MIRROR="https://registry.npmmirror.com"
 CN_GO_PROXY="https://goproxy.cn,direct"
 CN_RUST_MIRROR="https://rsproxy.cn"
 
 OFFICIAL_BREW_URL="https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"
+
+# 全局状态
+SUDO_OK=false
+USE_CHINA_MIRROR=false
+BREW_ONLY=false
+INSTALL_PYTHON=false
+INSTALL_NODEJS=false
+INSTALL_GO=false
+INSTALL_RUST=false
+INSTALL_CMAKE=false
+INSTALL_KIRO=false
+INSTALL_CURSOR=false
+INSTALL_VSCODE=false
+PYTHON_VERSION=""
+NODEJS_VERSION=""
+GO_VERSION=""
 
 #===========================================
 # 工具函数
@@ -73,7 +88,6 @@ append_if_missing() {
 }
 
 get_system_proxy() {
-    # 检查环境变量 (终端代理)
     if [[ -n "$HTTPS_PROXY" ]]; then
         echo "HTTPS_PROXY|$HTTPS_PROXY"
         return 0
@@ -86,8 +100,61 @@ get_system_proxy() {
         echo "ALL_PROXY|$ALL_PROXY"
         return 0
     fi
-    # macOS 系统代理不会自动被终端读取，所以只检测环境变量
     return 1
+}
+
+#===========================================
+# 检测函数
+#===========================================
+
+# 网络连通性检测（仅在无代理且未指定 --china 时调用）
+check_network() {
+    local unreachable=0
+    for url in "https://github.com" "https://registry.npmjs.org"; do
+        if ! curl -sI --connect-timeout 3 "$url" > /dev/null 2>&1; then
+            unreachable=$((unreachable + 1))
+        fi
+    done
+    if [[ $unreachable -gt 0 ]]; then
+        warn "检测到部分境外源不可达，建议加 --china 参数使用镜像源"
+    fi
+}
+
+# sudo 免密可用性检测
+check_sudo() {
+    if sudo -n true 2>/dev/null; then
+        SUDO_OK=true
+    else
+        SUDO_OK=false
+    fi
+}
+
+# Python3 真实性检测（macOS 14+ 可能是 Xcode CLT stub）
+check_python_real() {
+    if has python3; then
+        if python3 -c "import sys" 2>/dev/null; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+    return 1
+}
+
+# 通用安装后验证
+verify_install() {
+    local cmd="$1" ver_cmd="${2:-$1 --version}"
+    if has "$cmd"; then
+        local ver=$(eval "$ver_cmd" 2>&1 | head -1)
+        info "${cmd} 验证通过 (${ver})"
+        return 0
+    else
+        fail "${cmd} 安装后未找到，请检查 PATH 配置"
+        if [[ $(uname -m) == "arm64" ]] && has brew; then
+            dim "    提示: Apple Silicon 请确认已执行 eval \"\$(/opt/homebrew/bin/brew shellenv)\""
+        fi
+        return 1
+    fi
 }
 
 #===========================================
@@ -100,10 +167,35 @@ setup_china_mirror() {
     NPM_MIRROR="$CN_NPM_MIRROR"
     GO_PROXY="$CN_GO_PROXY"
     RUST_MIRROR="$CN_RUST_MIRROR"
-    
-    # 立即设置 Homebrew 环境变量（当前 session 生效）
+
+    # 立即设置 Homebrew 环境变量（当前 session 生效，安装 brew 前必须 export）
+    export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/brew.git"
     export HOMEBREW_API_DOMAIN="${BREW_BOTTLE_MIRROR}/api"
     export HOMEBREW_BOTTLE_DOMAIN="${BREW_BOTTLE_MIRROR}"
+}
+
+# 统一持久化所有镜像配置到 shell rc
+save_mirrors() {
+    $USE_CHINA_MIRROR || return 0
+
+    step "持久化镜像配置"
+    local rc=$(get_shell_rc)
+
+    # Homebrew 镜像（三组变量统一持久化）
+    local brew_config="
+# Homebrew 镜像 (devbox)
+export HOMEBREW_BREW_GIT_REMOTE=\"${BREW_MIRROR}/git/homebrew/brew.git\"
+export HOMEBREW_API_DOMAIN=\"${BREW_BOTTLE_MIRROR}/api\"
+export HOMEBREW_BOTTLE_DOMAIN=\"${BREW_BOTTLE_MIRROR}\""
+
+    append_if_missing "$rc" "$brew_config" "HOMEBREW_BOTTLE_DOMAIN"
+    info "Homebrew 镜像已持久化"
+
+    # Go 代理
+    if has go && [[ -n "$GO_PROXY" ]]; then
+        append_if_missing "$rc" "export GOPROXY=\"${GO_PROXY}\"" "GOPROXY"
+        info "Go 代理已持久化"
+    fi
 }
 
 #===========================================
@@ -164,8 +256,15 @@ cmd_status() {
     echo "  芯片       $(uname -m)"
     echo "  Shell      $(basename $SHELL)"
     echo "  配置文件   $(get_shell_rc)"
-    
-    # 显示代理信息
+
+    # sudo 可用性
+    if sudo -n true 2>/dev/null; then
+        echo "  sudo       免密可用"
+    else
+        echo "  sudo       需要密码"
+    fi
+
+    # 代理信息
     local proxy_info=$(get_system_proxy)
     if [[ -n "$proxy_info" ]]; then
         local proxy_source=$(echo "$proxy_info" | cut -d'|' -f1)
@@ -174,11 +273,17 @@ cmd_status() {
     fi
 
     section "基础工具"
+    if xcode-select -p &>/dev/null; then
+        info "Xcode CLI Tools"
+        dim "    └─ 路径: $(xcode-select -p)"
+    else
+        fail "Xcode CLI Tools 未安装"
+    fi
+
     if has brew; then
         local brew_ver=$(brew --version 2>/dev/null | head -1 | awk '{print $2}' || echo "unknown")
         info "Homebrew ${brew_ver}"
         dim "    ├─ 路径: $(which brew)"
-        # 从配置文件检测镜像
         local rc=$(get_shell_rc)
         local brew_mirror=$(grep "HOMEBREW_BOTTLE_DOMAIN" "$rc" 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' | tail -1)
         if [[ -n "$brew_mirror" ]]; then
@@ -192,12 +297,6 @@ cmd_status() {
         fail "Homebrew 未安装"
     fi
 
-    if xcode-select -p &>/dev/null; then
-        info "Xcode CLI Tools"
-    else
-        fail "Xcode CLI Tools 未安装"
-    fi
-
     if has git; then
         local git_ver=$(git --version | awk '{print $3}')
         info "Git ${git_ver}"
@@ -208,13 +307,17 @@ cmd_status() {
 
     section "编程语言"
     if has python3; then
-        info "Python $(python3 --version | awk '{print $2}')"
-        dim "    ├─ 路径: $(which python3)"
-        if [[ -f ~/.pip/pip.conf ]]; then
-            local pip_mirror=$(grep "index-url" ~/.pip/pip.conf 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
-            dim "    └─ pip:  $pip_mirror"
+        if check_python_real; then
+            info "Python $(python3 --version | awk '{print $2}')"
+            dim "    ├─ 路径: $(which python3)"
+            local pip_url=$(pip3 config get global.index-url 2>/dev/null)
+            if [[ -n "$pip_url" && "$pip_url" != *"WARNING"* ]]; then
+                dim "    └─ pip:  $pip_url"
+            else
+                dim "    └─ pip:  官方源"
+            fi
         else
-            dim "    └─ pip:  官方源"
+            warn "Python (Xcode CLT stub，非真实 Python)"
         fi
     else
         dim "  Python 未安装"
@@ -256,49 +359,33 @@ cmd_status() {
     fi
 
     section "开发工具"
-    # Kiro
     if [[ -d "/Applications/Kiro.app" ]]; then
         info "Kiro"
         dim "    └─ 路径: /Applications/Kiro.app"
     else
         dim "  Kiro 未安装"
     fi
-    
-    # Cursor
+
     if [[ -d "/Applications/Cursor.app" ]]; then
         info "Cursor"
         dim "    └─ 路径: /Applications/Cursor.app"
     else
         dim "  Cursor 未安装"
     fi
-    
-    # VS Code
+
     if [[ -d "/Applications/Visual Studio Code.app" ]]; then
         info "VS Code"
         dim "    └─ 路径: /Applications/Visual Studio Code.app"
     else
         dim "  VS Code 未安装"
     fi
-    
+
     echo ""
 }
 
 #===========================================
-# 命令: install (安装环境)
+# 安装函数
 #===========================================
-USE_CHINA_MIRROR=false
-BREW_ONLY=false
-INSTALL_PYTHON=false
-INSTALL_NODEJS=false
-INSTALL_GO=false
-INSTALL_RUST=false
-INSTALL_CMAKE=false
-INSTALL_KIRO=false
-INSTALL_CURSOR=false
-INSTALL_VSCODE=false
-PYTHON_VERSION=""
-NODEJS_VERSION=""
-GO_VERSION=""
 
 parse_install_args() {
     for arg in "$@"; do
@@ -321,33 +408,68 @@ parse_install_args() {
     done
 }
 
+# ---- 第 1 层: Xcode CLT ----
+install_xcode_clt() {
+    step "安装 Xcode 命令行工具"
+
+    if xcode-select -p &>/dev/null; then
+        info "Xcode CLI Tools 已安装"
+        return 0
+    fi
+
+    # 方式 A: sudo 可用，用 softwareupdate 静默安装（无 GUI 弹窗）
+    if $SUDO_OK; then
+        touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+        local clt_label=$(softwareupdate --list 2>&1 | grep -o "Command Line Tools for Xcode-[0-9.]*" | sort -V | tail -1)
+        if [[ -n "$clt_label" ]]; then
+            info "找到安装包: $clt_label，正在安装..."
+            sudo softwareupdate -i "$clt_label" --verbose
+            rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+            if xcode-select -p &>/dev/null; then
+                info "Xcode CLI Tools 安装完成"
+                return 0
+            fi
+        fi
+        rm -f /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+        warn "softwareupdate 安装失败，回退到 GUI 弹窗方式"
+    fi
+
+    # 方式 B: fallback 到 GUI 弹窗（sudo 不可用或方式 A 失败）
+    warn "需要手动安装 Xcode 命令行工具"
+    xcode-select --install 2>/dev/null || true
+    echo "请在弹出的窗口中点击「安装」，完成后按回车继续..."
+    read -r -p ""
+
+    # 验证
+    if xcode-select -p &>/dev/null; then
+        info "Xcode CLI Tools 安装完成"
+        return 0
+    else
+        fail "Xcode CLI Tools 安装失败"
+        return 1
+    fi
+}
+
+# ---- 第 1 层: Homebrew ----
 install_homebrew() {
     step "安装 Homebrew"
-    
+
     if has brew; then
         local brew_ver=$(brew --version 2>/dev/null | head -1 || echo "unknown")
         info "Homebrew 已安装 (${brew_ver})"
         return 0
     fi
-    
-    if ! xcode-select -p &>/dev/null; then
-        warn "需要先安装 Xcode 命令行工具"
-        xcode-select --install 2>/dev/null || true
-        echo "请在弹出的窗口中点击「安装」，完成后按回车继续..."
-        read -p ""
-    fi
-    
+
     if [[ -n "$BREW_MIRROR" ]]; then
-        export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/brew.git"
+        # 中国镜像: 用中科大一行式脚本（不依赖 git）
         export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
-        git clone --depth=1 "${BREW_MIRROR}/git/homebrew/install.git" /tmp/brew-install
-        /bin/bash /tmp/brew-install/install.sh
-        rm -rf /tmp/brew-install
+        /bin/bash -c "$(curl -fsSL ${CN_BREW_INSTALL_SCRIPT})"
     else
         /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
     fi
-    
+
+    # Apple Silicon / Intel PATH 配置
     local rc=$(get_shell_rc)
     if [[ $(uname -m) == "arm64" ]]; then
         append_if_missing "$rc" 'eval "$(/opt/homebrew/bin/brew shellenv)"' "/opt/homebrew"
@@ -356,113 +478,89 @@ install_homebrew() {
         append_if_missing "$rc" 'eval "$(/usr/local/bin/brew shellenv)"' "/usr/local"
         eval "$(/usr/local/bin/brew shellenv)"
     fi
-    
-    info "Homebrew 安装完成"
+
+    verify_install "brew" "brew --version | head -1"
 }
 
-install_git() {
-    step "安装 Git"
-    
-    if has git; then
-        local git_ver=$(git --version | awk '{print $3}')
-        info "Git 已安装 (${git_ver})"
-        return 0
-    fi
-    
-    brew install git
-    info "Git 安装完成 ($(git --version | awk '{print $3}'))"
-}
-
-save_homebrew_mirror() {
-    [[ -z "$BREW_BOTTLE_MIRROR" ]] && return 0
-    
-    step "配置 Homebrew 镜像"
-    local rc=$(get_shell_rc)
-    local config="
-# Homebrew 镜像
-export HOMEBREW_API_DOMAIN=\"${BREW_BOTTLE_MIRROR}/api\"
-export HOMEBREW_BOTTLE_DOMAIN=\"${BREW_BOTTLE_MIRROR}\""
-    
-    append_if_missing "$rc" "$config" "HOMEBREW_BOTTLE_DOMAIN"
-    info "Homebrew 镜像已配置"
-}
-
+# ---- 第 2 层: Python ----
 install_python() {
     step "安装 Python"
     local pkg="python"
     [[ -n "$PYTHON_VERSION" ]] && pkg="python@${PYTHON_VERSION}"
-    
-    if brew list "$pkg" &>/dev/null; then
+
+    # 检测是否已有真实 Python（非 Xcode CLT stub）
+    if brew list "$pkg" &>/dev/null && check_python_real; then
         info "Python 已安装 ($(python3 --version))"
     else
-        brew install "$pkg"
-        info "Python 安装完成 ($(python3 --version))"
+        if has python3 && ! check_python_real; then
+            warn "检测到 python3 为 Xcode CLT stub，将通过 Homebrew 安装真实 Python"
+        fi
+        brew install "$pkg" || { fail "Python 安装失败"; return 1; }
     fi
-    
-    step "配置 pip 镜像"
-    mkdir -p ~/.pip ~/.config/pip
-    local host=$(echo $PIP_MIRROR | sed 's|https\?://||;s|/.*||')
-    cat > ~/.pip/pip.conf << EOF
-[global]
-index-url = ${PIP_MIRROR}
-trusted-host = ${host}
-EOF
-    cp ~/.pip/pip.conf ~/.config/pip/pip.conf
-    info "pip → $PIP_MIRROR"
+
+    verify_install "python3" "python3 --version" || return 1
+
+    # 仅在使用中国镜像时配置 pip
+    if $USE_CHINA_MIRROR && has pip3; then
+        step "配置 pip 镜像"
+        pip3 config set global.index-url "$PIP_MIRROR" 2>/dev/null || true
+        pip3 config set global.trusted-host "$(echo $PIP_MIRROR | sed 's|https\?://||;s|/.*||')" 2>/dev/null || true
+        info "pip → $PIP_MIRROR"
+    fi
 }
 
+# ---- 第 2 层: Node.js ----
 install_nodejs() {
     step "安装 Node.js"
     local pkg="node"
     [[ -n "$NODEJS_VERSION" ]] && pkg="node@${NODEJS_VERSION}"
-    
+
     if brew list "$pkg" &>/dev/null; then
         info "Node.js 已安装 ($(node --version))"
     else
-        brew install "$pkg"
-        info "Node.js 安装完成 ($(node --version))"
+        brew install "$pkg" || { fail "Node.js 安装失败"; return 1; }
     fi
-    
-    step "配置 npm 镜像"
-    npm config set registry "$NPM_MIRROR"
-    info "npm → $NPM_MIRROR"
+
+    verify_install "node" "node --version" || return 1
+
+    # 仅在使用中国镜像时配置 npm registry
+    if $USE_CHINA_MIRROR && has npm; then
+        step "配置 npm 镜像"
+        npm config set registry "$NPM_MIRROR"
+        info "npm → $NPM_MIRROR"
+    fi
 }
 
+# ---- 第 2 层: Go ----
 install_go() {
     step "安装 Go"
     local pkg="go"
     [[ -n "$GO_VERSION" ]] && pkg="go@${GO_VERSION}"
-    
+
     if brew list "$pkg" &>/dev/null; then
         info "Go 已安装 ($(go version))"
     else
-        brew install "$pkg"
-        info "Go 安装完成 ($(go version))"
+        brew install "$pkg" || { fail "Go 安装失败"; return 1; }
     fi
-    
+
+    verify_install "go" "go version" || return 1
+
+    # 确保 ~/go/bin 在 PATH 中
+    local rc=$(get_shell_rc)
+    append_if_missing "$rc" 'export PATH="$HOME/go/bin:$PATH"' 'go/bin'
+    export PATH="$HOME/go/bin:$PATH"
+
     if [[ -n "$GO_PROXY" ]]; then
-        step "配置 Go 镜像"
+        step "配置 Go 代理"
         go env -w GOPROXY="$GO_PROXY"
         info "GOPROXY → $GO_PROXY"
     fi
 }
 
-install_cmake() {
-    step "安装 CMake"
-    
-    if has cmake; then
-        local cmake_ver=$(cmake --version | head -1 | awk '{print $3}')
-        info "CMake 已安装 (${cmake_ver})"
-        return 0
-    fi
-    
-    brew install cmake
-    info "CMake 安装完成 ($(cmake --version | head -1 | awk '{print $3}'))"
-}
-
+# ---- 第 2 层: Rust ----
 install_rust() {
     step "安装 Rust"
-    
+
     if has rustc; then
         info "Rust 已安装 ($(rustc --version))"
     else
@@ -470,15 +568,16 @@ install_rust() {
             export RUSTUP_DIST_SERVER="$RUST_MIRROR"
             export RUSTUP_UPDATE_ROOT="${RUST_MIRROR}/rustup"
         fi
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y || { fail "Rust 安装失败"; return 1; }
         source "$HOME/.cargo/env"
-        info "Rust 安装完成 ($(rustc --version))"
     fi
-    
+
+    verify_install "rustc" "rustc --version" || return 1
+
     if [[ -n "$RUST_MIRROR" ]]; then
         step "配置 Rust 镜像"
         mkdir -p ~/.cargo
-        cat > ~/.cargo/config << EOF
+        cat > ~/.cargo/config.toml << EOF
 [source.crates-io]
 replace-with = 'rsproxy'
 
@@ -489,60 +588,63 @@ EOF
     fi
 }
 
+# ---- 第 2 层: CMake ----
+install_cmake() {
+    step "安装 CMake"
+
+    if has cmake; then
+        local cmake_ver=$(cmake --version | head -1 | awk '{print $3}')
+        info "CMake 已安装 (${cmake_ver})"
+        return 0
+    fi
+
+    brew install cmake || { fail "CMake 安装失败"; return 1; }
+    verify_install "cmake" "cmake --version | head -1"
+}
+
+# ---- 第 3 层: 开发工具 ----
 install_kiro() {
     step "安装 Kiro"
-    
+
     if [[ -d "/Applications/Kiro.app" ]]; then
         info "Kiro 已安装"
         return 0
     fi
-    
-    # 使用 brew cask 安装
-    if brew list --cask kiro &>/dev/null 2>&1; then
-        info "Kiro 已安装"
-    else
-        brew install --cask kiro
-        info "Kiro 安装完成"
-    fi
+
+    brew install --cask kiro || { fail "Kiro 安装失败"; return 1; }
+    info "Kiro 安装完成"
 }
 
 install_cursor() {
     step "安装 Cursor"
-    
+
     if [[ -d "/Applications/Cursor.app" ]]; then
         info "Cursor 已安装"
         return 0
     fi
-    
-    # 使用 brew cask 安装
-    if brew list --cask cursor &>/dev/null 2>&1; then
-        info "Cursor 已安装"
-    else
-        brew install --cask cursor
-        info "Cursor 安装完成"
-    fi
+
+    brew install --cask cursor || { fail "Cursor 安装失败"; return 1; }
+    info "Cursor 安装完成"
 }
 
 install_vscode() {
     step "安装 VS Code"
-    
+
     if [[ -d "/Applications/Visual Studio Code.app" ]]; then
         info "VS Code 已安装"
         return 0
     fi
-    
-    # 使用 brew cask 安装
-    if brew list --cask visual-studio-code &>/dev/null 2>&1; then
-        info "VS Code 已安装"
-    else
-        brew install --cask visual-studio-code
-        info "VS Code 安装完成"
-    fi
+
+    brew install --cask visual-studio-code || { fail "VS Code 安装失败"; return 1; }
+    info "VS Code 安装完成"
 }
 
+#===========================================
+# 命令: install (安装环境)
+#===========================================
 cmd_install() {
     parse_install_args "$@"
-    
+
     # 设置镜像源
     if $USE_CHINA_MIRROR; then
         setup_china_mirror
@@ -550,40 +652,53 @@ cmd_install() {
     else
         local region="官方源"
     fi
-    
+
     show_header "install - 环境安装 [$region]"
-    
-    # 检测代理并提示
+
+    # 代理检测
     local proxy_info=$(get_system_proxy)
     if [[ -n "$proxy_info" ]]; then
         local proxy_source=$(echo "$proxy_info" | cut -d'|' -f1)
         local proxy_value=$(echo "$proxy_info" | cut -d'|' -f2)
         info "检测到代理: $proxy_value ($proxy_source)"
         if $USE_CHINA_MIRROR; then
-            warn "已有代理,可能不需要 --china 镜像"
+            warn "已有代理，可能不需要 --china 镜像"
         fi
     fi
-    
-    install_homebrew
-    save_homebrew_mirror
-    install_git
-    
+
+    # 网络检测（无代理且未指定镜像时）
+    if ! $USE_CHINA_MIRROR && [[ -z "$proxy_info" ]]; then
+        check_network
+    fi
+
+    # sudo 检测
+    check_sudo
+
+    # ── 第 1 层: 基础设施（失败则停止）──
+    install_xcode_clt || { fail "Xcode CLT 安装失败，无法继续"; exit 1; }
+    install_homebrew  || { fail "Homebrew 安装失败，无法继续"; exit 1; }
+    save_mirrors
+
     if $BREW_ONLY; then
         echo ""
         info "Homebrew 安装完成 (--brew-only)"
         warn "运行 source $(get_shell_rc) 或重开终端生效"
         return 0
     fi
-    
-    $INSTALL_PYTHON && install_python
-    $INSTALL_NODEJS && install_nodejs
-    $INSTALL_CMAKE && install_cmake
-    $INSTALL_GO && install_go
-    $INSTALL_RUST && install_rust
-    $INSTALL_KIRO && install_kiro
-    $INSTALL_CURSOR && install_cursor
-    $INSTALL_VSCODE && install_vscode
-    
+
+    # ── 第 2 层: 运行时（失败则警告继续）──
+    $INSTALL_PYTHON && { install_python || warn "Python 安装未完成"; }
+    $INSTALL_NODEJS && { install_nodejs || warn "Node.js 安装未完成"; }
+    $INSTALL_CMAKE  && { install_cmake  || warn "CMake 安装未完成"; }
+    $INSTALL_GO     && { install_go     || warn "Go 安装未完成"; }
+    $INSTALL_RUST   && { install_rust   || warn "Rust 安装未完成"; }
+
+    # ── 第 3 层: 开发工具 ──
+    $INSTALL_KIRO   && { install_kiro   || warn "Kiro 安装未完成"; }
+    $INSTALL_CURSOR && { install_cursor || warn "Cursor 安装未完成"; }
+    $INSTALL_VSCODE && { install_vscode || warn "VS Code 安装未完成"; }
+
+    # 安装摘要
     echo ""
     echo "────────────────────────────────────────"
     printf "${GREEN}安装完成${NC}\n"
@@ -592,10 +707,10 @@ cmd_install() {
     echo "  Homebrew  ${brew_ver}"
     $INSTALL_PYTHON && echo "  Python    $(python3 --version 2>/dev/null | awk '{print $2}')"
     $INSTALL_NODEJS && echo "  Node.js   $(node --version 2>/dev/null)"
-    $INSTALL_CMAKE && echo "  CMake     $(cmake --version 2>/dev/null | head -1 | awk '{print $3}')"
-    $INSTALL_GO && echo "  Go        $(go version 2>/dev/null | awk '{print $3}')"
-    $INSTALL_RUST && echo "  Rust      $(rustc --version 2>/dev/null | awk '{print $2}')"
-    $INSTALL_KIRO && echo "  Kiro      ✓"
+    $INSTALL_CMAKE  && echo "  CMake     $(cmake --version 2>/dev/null | head -1 | awk '{print $3}')"
+    $INSTALL_GO     && echo "  Go        $(go version 2>/dev/null | awk '{print $3}')"
+    $INSTALL_RUST   && echo "  Rust      $(rustc --version 2>/dev/null | awk '{print $2}')"
+    $INSTALL_KIRO   && echo "  Kiro      ✓"
     $INSTALL_CURSOR && echo "  Cursor    ✓"
     $INSTALL_VSCODE && echo "  VS Code   ✓"
     echo ""
@@ -608,7 +723,7 @@ cmd_install() {
 main() {
     local cmd="${1:-}"
     shift 2>/dev/null || true
-    
+
     case "$cmd" in
         install)        cmd_install "$@" ;;
         status)         cmd_status ;;
