@@ -62,12 +62,6 @@ $script:SCOOP_CN_EXTRAS_REPO = "https://gitee.com/scoop-installer/Extras"
 $script:SCOOP_CN_MAIN_REPO = "https://gitee.com/scoop-installer/Main"
 $script:GH_PROXY = "https://gh-proxy.org"
 
-# Mirror configuration (empty = no override)
-$script:PIP_MIRROR = ""
-$script:NPM_MIRROR = ""
-$script:GO_PROXY = ""
-$script:RUST_MIRROR = ""
-
 # China mirrors
 $script:CN_PIP_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
 $script:CN_NPM_MIRROR = "https://registry.npmmirror.com"
@@ -192,16 +186,6 @@ function Test-InstallResult {
         Write-Dim "    Tip: Restart PowerShell to reload PATH"
         return $false
     }
-}
-
-#===========================================
-# Mirror Configuration
-#===========================================
-function Set-ChinaMirror {
-    $script:PIP_MIRROR = $script:CN_PIP_MIRROR
-    $script:NPM_MIRROR = $script:CN_NPM_MIRROR
-    $script:GO_PROXY = $script:CN_GO_PROXY
-    $script:RUST_MIRROR = $script:CN_RUST_MIRROR
 }
 
 #===========================================
@@ -678,7 +662,7 @@ function Install-Python {
         Write-Step "Configuring pip mirror"
         $pipDir = "$env:APPDATA\pip"
         if (-not (Test-Path $pipDir)) { New-Item -ItemType Directory -Path $pipDir -Force | Out-Null }
-        $mirror = $script:PIP_MIRROR
+        $mirror = $script:CN_PIP_MIRROR
         $pipHost = ([uri]$mirror).Host
         $pipContent = "[global]`nindex-url = $mirror`ntrusted-host = $pipHost"
         Set-Content -Path "$pipDir\pip.ini" -Value $pipContent
@@ -723,8 +707,9 @@ function Install-NodeJS {
     # Only configure npm mirror when -China is specified
     if ($China -and (Test-Command npm)) {
         Write-Step "Configuring npm mirror"
-        npm config set registry $script:NPM_MIRROR
-        Write-Info "npm -> $($script:NPM_MIRROR)"
+        $mirror = $script:CN_NPM_MIRROR
+        npm config set registry $mirror
+        Write-Info "npm -> $mirror"
     }
     
     # Install pnpm globally
@@ -772,11 +757,11 @@ function Install-Go {
         }
     }
     
-    $proxy = $script:GO_PROXY
-    if ($proxy) {
+    if ($China) {
         Write-Step "Configuring Go proxy"
-        go env -w GOPROXY="$proxy"
-        Write-Info "GOPROXY -> $proxy"
+        $goProxy = $script:CN_GO_PROXY
+        go env -w GOPROXY="$goProxy"
+        Write-Info "GOPROXY -> $goProxy"
     }
 }
 
@@ -898,7 +883,7 @@ function Install-VCTools {
 function Install-Rust {
     Write-Step "Installing Rust"
     
-    $mirror = $script:RUST_MIRROR
+    $mirror = if ($China) { $script:CN_RUST_MIRROR } else { $null }
     
     if (Test-Command rustc) {
         $rustVer = rustc --version
@@ -995,7 +980,6 @@ function Install-VSCode {
 #===========================================
 function Invoke-Install {
     if ($China) {
-        Set-ChinaMirror
         $region = "China Mirror"
     } else {
         $region = "Official"
