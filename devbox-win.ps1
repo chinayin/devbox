@@ -54,6 +54,12 @@ $script:IsAdmin = Test-IsAdmin
 $script:VERSION = "v1.0"
 $script:PROJECT_URL = "https://github.com/chinayin/devbox"
 
+# Scoop install URLs
+$script:SCOOP_OFFICIAL_URL = "get.scoop.sh"
+$script:SCOOP_CN_URL = "scoop.201704.xyz"
+$script:SCOOP_CN_REPO = "https://gitee.com/scoop-installer/scoop"
+$script:GH_PROXY = "https://gh-proxy.org"
+
 # Mirror configuration
 $script:PIP_MIRROR = "https://pypi.org/simple"
 $script:NPM_MIRROR = "https://registry.npmjs.org"
@@ -150,7 +156,7 @@ function Show-Help {
     Write-Host "  -China, -c          Use China mirrors (Tsinghua/Taobao)"
     Write-Host "  -ScoopOnly          Only install Scoop"
     Write-Host "  -NoAria2            Disable aria2 (enabled by default for faster downloads)"
-    Write-Host "  -VibeCoding         Install AI coding environment (Python + Node.js + CMake + VC++ Build Tools)"
+    Write-Host "  -VibeCoding         Install AI coding environment (Python + Node.js)"
     Write-Host "  -Python             Install Python"
     Write-Host "  -PythonVersion      Specify Python version (e.g. 3.12)"
     Write-Host "  -NodeJS             Install Node.js"
@@ -331,43 +337,118 @@ function Invoke-Status {
 function Install-Scoop {
     Write-Step "Installing Scoop"
     
-    if (Test-Command scoop) {
-        Write-Info "Scoop already installed"
-        return
-    }
-    
-    # 检查并设置 ExecutionPolicy
-    Write-Step "Checking ExecutionPolicy"
-    $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
-    if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
-        try {
-            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-            Write-Info "ExecutionPolicy set to RemoteSigned"
-        } catch {
-            Write-Fail "Failed to set ExecutionPolicy"
-            Write-Host ""
-            Write-Host "Please run this command manually first:" -ForegroundColor Yellow
-            Write-Host "  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan
-            Write-Host ""
-            Write-Host "If that fails, your organization may have restricted this." -ForegroundColor Gray
-            Write-Host "Try running PowerShell as Administrator, or contact your IT admin." -ForegroundColor Gray
-            throw "ExecutionPolicy configuration required"
+    if (-not (Test-Command scoop)) {
+        # 检查并设置 ExecutionPolicy
+        Write-Step "Checking ExecutionPolicy"
+        $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+        if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
+            try {
+                Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+                Write-Info "ExecutionPolicy set to RemoteSigned"
+            } catch {
+                Write-Fail "Failed to set ExecutionPolicy"
+                Write-Host ""
+                Write-Host "Please run this command manually first:" -ForegroundColor Yellow
+                Write-Host "  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan
+                Write-Host ""
+                throw "ExecutionPolicy configuration required"
+            }
+        } else {
+            Write-Info "ExecutionPolicy OK ($currentPolicy)"
         }
+        
+        # 决定安装源: 有代理走官方，无代理+China走镜像，其他走官方
+        $proxy = Get-SystemProxy
+        $useOfficialSource = $true
+        if ($China -and -not $proxy) {
+            $useOfficialSource = $false
+        }
+        
+        # 构建安装参数
+        $adminFlag = ''
+        if ($script:IsAdmin) {
+            $adminFlag = ' -RunAsAdmin'
+            Write-Dim "    Admin mode, installing globally"
+        }
+        
+        if ($useOfficialSource) {
+            if ($proxy) { Write-Dim "    Proxy detected, using official source" }
+            try {
+                iex "& {$(irm $script:SCOOP_OFFICIAL_URL)}$adminFlag"
+            } catch {
+                throw "Scoop installation failed: $_"
+            }
+        } else {
+            Write-Dim "    Using China mirror"
+            try {
+                iex "& {$(irm $script:SCOOP_CN_URL)}$adminFlag"
+            } catch {
+                Write-Warn "China mirror failed, trying official source..."
+                iex "& {$(irm $script:SCOOP_OFFICIAL_URL)}$adminFlag"
+            }
+        }
+        
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+        
+        if (-not (Test-Command scoop)) {
+            throw "Scoop installation failed"
+        }
+        
+        Write-Info "Scoop installed"
     } else {
-        Write-Info "ExecutionPolicy OK ($currentPolicy)"
+        Write-Info "Scoop already installed"
     }
     
-    # Always use official installer (mirror installer may be outdated)
-    if ($script:IsAdmin) {
-        Write-Info "Admin detected, installing globally"
-        iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
-    } else {
-        irm get.scoop.sh | iex
+    # China 模式: 确保配置 gitee repo 和 main bucket 镜像
+    # 注意: 不设置 URL_PROXY，因为 gh-proxy 只能代理 github.com 的资源
+    # 而 scoop 的 URL_PROXY 会对所有下载链接加前缀（包括 python.org、nodejs.org 等），导致下载失败
+    if ($China -and -not (Get-SystemProxy)) {
+        # 检查 SCOOP_REPO 是否已经是 gitee（scoop config 输出带描述文字，用 match 判断）
+        $repoOutput = scoop config SCOOP_REPO 2>$null
+        if ($repoOutput -notmatch 'gitee\.com') {
+            scoop config SCOOP_REPO $script:SCOOP_CN_REPO
+            Write-Dim "    Scoop repo -> gitee"
+        }
+        
+        # 确保 main bucket 是有效的 git 仓库且指向 gitee 镜像
+        # 通过 scoop 自身获取 buckets 目录
+        $scoopDir = if ($env:SCOOP) { $env:SCOOP } else { "$env:USERPROFILE\scoop" }
+        $mainBucketPath = Join-Path $scoopDir "buckets\main"
+        
+        $needReaddMain = $false
+        $gitDir = Join-Path $mainBucketPath ".git"
+        if (Test-Path $gitDir) {
+            # 是 git 仓库，检查 remote URL 是否已经指向 gitee
+            $remoteUrl = git -C $mainBucketPath remote get-url origin 2>$null
+            if ($remoteUrl -notmatch 'gitee\.com') {
+                $needReaddMain = $true
+            }
+        } elseif (Test-Path $mainBucketPath) {
+            # 目录存在但不是 git 仓库
+            $needReaddMain = $true
+        } else {
+            # 目录不存在
+            $needReaddMain = $true
+        }
+        if ($needReaddMain) {
+            Write-Dim "    Reinitializing main bucket for China mirror..."
+            try { scoop bucket rm main 2>$null } catch {}
+            if (Test-Path $mainBucketPath) {
+                Remove-Item -Path $mainBucketPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            try {
+                scoop bucket add main "https://gitee.com/scoop-installer/Main"
+                Write-Dim "    main bucket -> gitee mirror"
+            } catch {
+                try {
+                    scoop bucket add main "$($script:GH_PROXY)/https://github.com/ScoopInstaller/Main"
+                    Write-Dim "    main bucket -> gh-proxy"
+                } catch {
+                    Write-Warn "Failed to reinitialize main bucket: $_"
+                }
+            }
+        }
     }
-    
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-    
-    Write-Info "Scoop installed"
 }
 
 function Install-Git {
@@ -742,8 +823,7 @@ function Invoke-Install {
     if ($VibeCoding) {
         $script:Python = $true
         $script:NodeJS = $true
-        $script:CMake = $true
-        $script:VCTools = $true
+        # CMake 和 VCTools 安装耗时较长，不再默认包含，需要时用 -CMake / -VCTools 单独安装
     }
     
     Write-Header "install - Setup [$region]"
@@ -793,6 +873,25 @@ function Invoke-Install {
     if ($VSCode -and (Test-Command code)) { Write-Host "  VS Code   installed" }
     Write-Host ""
     Write-Warn "Restart PowerShell to take effect"
+    
+    # 如果没有安装 CMake / VCTools，合并提示建议安装
+    $tips = @()
+    if (-not $CMake -and -not (Test-Command cmake)) {
+        $tips += "CMake (-CMake)"
+    }
+    if (-not $VCTools -and -not (Test-VCToolsInstalled)) {
+        $tips += "VC++ Build Tools (-VCTools)"
+    }
+    if ($tips.Count -gt 0) {
+        Write-Host ""
+        Write-Host "  Tip: " -ForegroundColor Yellow -NoNewline
+        Write-Host "To compile native Node.js modules (node-gyp, node-llama-cpp), you may need:"
+        foreach ($tip in $tips) {
+            Write-Host "    - $tip" -ForegroundColor Cyan
+        }
+        Write-Host "  Run: " -NoNewline
+        Write-Host ".\devbox-win.ps1 install -CMake -VCTools" -ForegroundColor Cyan
+    }
 }
 
 #===========================================
