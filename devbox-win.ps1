@@ -596,13 +596,13 @@ function Set-ScoopProxy {
     if ($Enable) {
         $proxy = Get-SystemProxy
         if ($proxy) {
-            scoop config proxy $proxy.Value 2>$null
+            scoop config proxy $proxy.Value
             Write-Info "Scoop proxy -> $($proxy.Value) (session only)"
             return $true
         }
     }
     if ($Disable) {
-        scoop config rm proxy 2>$null | Out-Null
+        scoop config rm proxy
         Write-Dim "    Scoop session proxy removed"
     }
     return $false
@@ -1017,7 +1017,6 @@ function Invoke-Install {
         if ($China) {
             Write-Warn "Proxy detected, -China mirror may not be needed"
         }
-        $scoopProxySet = Set-ScoopProxy -Enable
     }
     
     # Network check (no proxy and no -China)
@@ -1051,6 +1050,9 @@ function Invoke-Install {
             Write-Fail "Scoop installation failed, cannot continue: $_"
             return
         }
+        
+        # Set Scoop proxy after Scoop is ready (session only)
+        if ($proxy) { $scoopProxySet = Set-ScoopProxy -Enable }
         
         try {
             Install-Git
