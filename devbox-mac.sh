@@ -312,9 +312,12 @@ cmd_status() {
             dim "    ├─ 路径: $(which python3)"
             local pip_url=$(pip3 config get global.index-url 2>/dev/null)
             if [[ -n "$pip_url" && "$pip_url" != *"WARNING"* ]]; then
-                dim "    └─ pip:  $pip_url"
+                dim "    ├─ pip:  $pip_url"
             else
-                dim "    └─ pip:  官方源"
+                dim "    ├─ pip:  官方源"
+            fi
+            if has uv; then
+                dim "    └─ uv:   $(uv --version 2>&1 | head -1)"
             fi
         else
             warn "Python (Xcode CLT stub，非真实 Python)"
@@ -329,6 +332,12 @@ cmd_status() {
         if has npm; then
             local npm_mirror=$(npm config get registry 2>/dev/null)
             dim "    └─ npm:  $npm_mirror"
+        fi
+        if ! has npx; then
+            warn "    npx 未找到，请检查 Node.js 安装"
+        fi
+        if has pnpm; then
+            dim "    └─ pnpm: $(pnpm --version)"
         fi
     else
         dim "  Node.js 未安装"
@@ -507,6 +516,17 @@ install_python() {
         pip3 config set global.trusted-host "$(echo $PIP_MIRROR | sed 's|https\?://||;s|/.*||')" 2>/dev/null || true
         info "pip → $PIP_MIRROR"
     fi
+
+    # 安装 uv (包含 uvx)
+    if has pip3; then
+        if ! has uv; then
+            step "安装 uv"
+            pip3 install uv || { warn "uv 安装失败"; return 0; }
+            verify_install "uv" "uv --version"
+        else
+            info "uv 已安装 ($(uv --version 2>&1 | head -1))"
+        fi
+    fi
 }
 
 # ---- 第 2 层: Node.js ----
@@ -528,6 +548,17 @@ install_nodejs() {
         step "配置 npm 镜像"
         npm config set registry "$NPM_MIRROR"
         info "npm → $NPM_MIRROR"
+    fi
+
+    # 全局安装 pnpm
+    if has npm; then
+        if ! has pnpm; then
+            step "安装 pnpm"
+            npm install -g pnpm || { warn "pnpm 安装失败"; return 0; }
+            verify_install "pnpm" "pnpm --version"
+        else
+            info "pnpm 已安装 ($(pnpm --version))"
+        fi
     fi
 }
 

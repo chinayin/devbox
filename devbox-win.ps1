@@ -15,7 +15,6 @@ param(
     [ValidateSet('install', 'status', 'help')]
     [string]$Command = 'help',
     
-    [Alias('c')]
     [switch]$China,
     
     [switch]$VibeCoding,
@@ -35,7 +34,8 @@ param(
     [switch]$NoAria2
 )
 
-$ErrorActionPreference = 'Stop'
+# Non-critical errors should not stop the entire script; critical steps use try/catch + throw
+$ErrorActionPreference = 'Continue'
 
 #===========================================
 # Admin Detection
@@ -51,18 +51,20 @@ $script:IsAdmin = Test-IsAdmin
 #===========================================
 # Configuration
 #===========================================
-$script:VERSION = "v1.0"
+$script:VERSION = "v1.1"
 $script:PROJECT_URL = "https://github.com/chinayin/devbox"
 
 # Scoop install URLs
 $script:SCOOP_OFFICIAL_URL = "get.scoop.sh"
 $script:SCOOP_CN_URL = "scoop.201704.xyz"
 $script:SCOOP_CN_REPO = "https://gitee.com/scoop-installer/scoop"
+$script:SCOOP_CN_EXTRAS_REPO = "https://gitee.com/scoop-installer/Extras"
+$script:SCOOP_CN_MAIN_REPO = "https://gitee.com/scoop-installer/Main"
 $script:GH_PROXY = "https://gh-proxy.org"
 
-# Mirror configuration
-$script:PIP_MIRROR = "https://pypi.org/simple"
-$script:NPM_MIRROR = "https://registry.npmjs.org"
+# Mirror configuration (empty = no override)
+$script:PIP_MIRROR = ""
+$script:NPM_MIRROR = ""
 $script:GO_PROXY = ""
 $script:RUST_MIRROR = ""
 
@@ -102,7 +104,8 @@ function Test-Command {
     param([string]$Name)
     $cmd = Get-Command $Name -ErrorAction SilentlyContinue
     if (-not $cmd) { return $false }
-    if ($cmd.Source -match 'WindowsApps') { return $false }
+    # Only exclude WindowsApps stub for python/python3 (Store stub that opens Microsoft Store)
+    if ($Name -match '^python' -and $cmd.Source -match 'WindowsApps') { return $false }
     return $true
 }
 
@@ -126,6 +129,69 @@ function Get-SystemProxy {
 function Get-AdminStatus {
     if ($script:IsAdmin) { return "Admin" }
     return "User"
+}
+
+#===========================================
+# Detection Functions
+#===========================================
+
+# Network connectivity check (only when no proxy and no -China)
+function Test-Network {
+    $unreachable = 0
+    foreach ($url in @("https://github.com", "https://registry.npmjs.org")) {
+        try {
+            Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing | Out-Null
+        } catch {
+            $unreachable++
+        }
+    }
+    if ($unreachable -gt 0) {
+        Write-Warn "Some overseas sources are unreachable, consider using -China for mirrors"
+    }
+}
+
+# Python real check (exclude Windows Store stub)
+function Test-PythonReal {
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $cmd) { return $false }
+    if ($cmd.Source -match 'WindowsApps') { return $false }
+    try {
+        $output = python --version 2>&1
+        if ($output -match 'Microsoft Store|was not found') { return $false }
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# Generic post-install verification
+function Test-InstallResult {
+    param(
+        [string]$Name,
+        [string]$VersionCmd
+    )
+    
+    # Refresh PATH
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+    
+    if (Test-Command $Name) {
+        try {
+            if ($VersionCmd) {
+                $ver = Invoke-Expression $VersionCmd 2>&1 | Select-Object -First 1
+            } else {
+                $ver = & $Name --version 2>&1 | Select-Object -First 1
+            }
+            Write-Info "$Name verified ($ver)"
+            return $true
+        } catch {
+            Write-Info "$Name verified (version check failed)"
+            return $true
+        }
+    } else {
+        Write-Fail "$Name not found after install, check PATH configuration"
+        Write-Dim "    Tip: Restart PowerShell to reload PATH"
+        return $false
+    }
 }
 
 #===========================================
@@ -153,7 +219,7 @@ function Show-Help {
     Write-Host "  help        Show this help"
     Write-Host ""
     Write-Host "Install Options:"
-    Write-Host "  -China, -c          Use China mirrors (Tsinghua/Taobao)"
+    Write-Host "  -China              Use China mirrors (Tsinghua/Taobao)"
     Write-Host "  -ScoopOnly          Only install Scoop"
     Write-Host "  -NoAria2            Disable aria2 (enabled by default for faster downloads)"
     Write-Host "  -VibeCoding         Install AI coding environment (Python + Node.js)"
@@ -166,7 +232,7 @@ function Show-Help {
     Write-Host "  -Rust               Install Rust"
     Write-Host "  -CMake              Install CMake (needed by node-llama-cpp etc.)"
     Write-Host "  -VCTools            Install VS C++ Build Tools (needed by node-gyp)"
-    Write-Host "  -Kiro               Install Kiro (AI IDE) - manual download"
+    Write-Host "  -Kiro               Install Kiro (AI IDE)"
     Write-Host "  -Cursor             Install Cursor (AI IDE)"
     Write-Host "  -VSCode             Install VS Code"
     Write-Host ""
@@ -192,6 +258,8 @@ function Invoke-Status {
     Write-Host "  PowerShell $($PSVersionTable.PSVersion)"
     Write-Host "  Profile    $(Get-ProfilePath)"
     Write-Host "  Mode       $(Get-AdminStatus)"
+    $policy = Get-ExecutionPolicy -Scope CurrentUser
+    Write-Host "  ExecPolicy $policy"
     
     $proxy = Get-SystemProxy
     if ($proxy) {
@@ -204,7 +272,6 @@ function Invoke-Status {
     if (Test-Command scoop) {
         Write-Info "Scoop"
         Write-Dim "    Path: $(Get-Command scoop | Select-Object -ExpandProperty Source)"
-        # Check aria2 status
         if (Test-Command aria2c) {
             $aria2Enabled = scoop config aria2-enabled 2>$null
             if ($aria2Enabled -match 'True') {
@@ -225,16 +292,27 @@ function Invoke-Status {
     }
     
     Write-Section "Languages"
-    if (Test-Command python) {
-        $pyVer = (python --version 2>&1) -replace 'Python ', ''
-        Write-Info "Python $pyVer"
-        Write-Dim "    Path: $(Get-Command python | Select-Object -ExpandProperty Source)"
-        $pipConfig = "$env:APPDATA\pip\pip.ini"
-        if (Test-Path $pipConfig) {
-            $pipMirror = (Get-Content $pipConfig | Select-String 'index-url' | ForEach-Object { $_ -replace '.*=\s*', '' })
-            Write-Dim "    pip:  $pipMirror"
+    # Python with Store stub detection
+    $pycmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($pycmd) {
+        if ($pycmd.Source -match 'WindowsApps') {
+            Write-Warn "Python (Windows Store stub, not real Python)"
+        } elseif (Test-PythonReal) {
+            $pyVer = (python --version 2>&1) -replace 'Python ', ''
+            Write-Info "Python $pyVer"
+            Write-Dim "    Path: $($pycmd.Source)"
+            $pipConfig = "$env:APPDATA\pip\pip.ini"
+            if (Test-Path $pipConfig) {
+                $pipMirror = (Get-Content $pipConfig | Select-String 'index-url' | ForEach-Object { $_ -replace '.*=\s*', '' })
+                Write-Dim "    pip:  $pipMirror"
+            } else {
+                Write-Dim "    pip:  Official"
+            }
+            if (Test-Command uv) {
+                Write-Dim "    uv:   $(uv --version)"
+            }
         } else {
-            Write-Dim "    pip:  Official"
+            Write-Warn "Python (detected but not functional)"
         }
     } else {
         Write-Dim "  Python not installed"
@@ -247,6 +325,12 @@ function Invoke-Status {
         if (Test-Command npm) {
             $npmMirror = npm config get registry 2>$null
             Write-Dim "    npm:  $npmMirror"
+        }
+        if (-not (Test-Command npx)) {
+            Write-Warn "    npx not found, check Node.js installation"
+        }
+        if (Test-Command pnpm) {
+            Write-Dim "    pnpm: $(pnpm --version)"
         }
     } else {
         Write-Dim "  Node.js not installed"
@@ -332,13 +416,13 @@ function Invoke-Status {
 }
 
 #===========================================
-# Install Functions
+# Install Functions - Layer 1: Package Manager
 #===========================================
 function Install-Scoop {
     Write-Step "Installing Scoop"
     
     if (-not (Test-Command scoop)) {
-        # 检查并设置 ExecutionPolicy
+        # Check and set ExecutionPolicy
         Write-Step "Checking ExecutionPolicy"
         $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
         if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
@@ -348,7 +432,7 @@ function Install-Scoop {
             } catch {
                 Write-Fail "Failed to set ExecutionPolicy"
                 Write-Host ""
-                Write-Host "Please run this command manually first:" -ForegroundColor Yellow
+                Write-Host "  Please run this command manually first:" -ForegroundColor Yellow
                 Write-Host "  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan
                 Write-Host ""
                 throw "ExecutionPolicy configuration required"
@@ -357,14 +441,14 @@ function Install-Scoop {
             Write-Info "ExecutionPolicy OK ($currentPolicy)"
         }
         
-        # 决定安装源: 有代理走官方，无代理+China走镜像，其他走官方
+        # Decide install source: proxy -> official, no proxy + China -> mirror, else official
         $proxy = Get-SystemProxy
         $useOfficialSource = $true
         if ($China -and -not $proxy) {
             $useOfficialSource = $false
         }
         
-        # 构建安装参数
+        # Build install args
         $adminFlag = ''
         if ($script:IsAdmin) {
             $adminFlag = ' -RunAsAdmin'
@@ -374,17 +458,25 @@ function Install-Scoop {
         if ($useOfficialSource) {
             if ($proxy) { Write-Dim "    Proxy detected, using official source" }
             try {
-                iex "& {$(irm $script:SCOOP_OFFICIAL_URL)}$adminFlag"
+                Invoke-Expression "& {$(Invoke-RestMethod $script:SCOOP_OFFICIAL_URL)}$adminFlag"
             } catch {
                 throw "Scoop installation failed: $_"
             }
         } else {
             Write-Dim "    Using China mirror"
             try {
-                iex "& {$(irm $script:SCOOP_CN_URL)}$adminFlag"
+                Invoke-Expression "& {$(Invoke-RestMethod $script:SCOOP_CN_URL)}$adminFlag"
             } catch {
                 Write-Warn "China mirror failed, trying official source..."
-                iex "& {$(irm $script:SCOOP_OFFICIAL_URL)}$adminFlag"
+                try {
+                    Invoke-Expression "& {$(Invoke-RestMethod $script:SCOOP_OFFICIAL_URL)}$adminFlag"
+                } catch {
+                    # Fallback: check if winget is available
+                    if (Test-Command winget) {
+                        Write-Dim "    You can install tools via winget manually."
+                    }
+                    throw "Scoop installation failed: $_"
+                }
             }
         }
         
@@ -398,59 +490,10 @@ function Install-Scoop {
     } else {
         Write-Info "Scoop already installed"
     }
-    
-    # China 模式: 确保配置 gitee repo 和 main bucket 镜像
-    # 注意: 不设置 URL_PROXY，因为 gh-proxy 只能代理 github.com 的资源
-    # 而 scoop 的 URL_PROXY 会对所有下载链接加前缀（包括 python.org、nodejs.org 等），导致下载失败
-    if ($China -and -not (Get-SystemProxy)) {
-        # 检查 SCOOP_REPO 是否已经是 gitee（scoop config 输出带描述文字，用 match 判断）
-        $repoOutput = scoop config SCOOP_REPO 2>$null
-        if ($repoOutput -notmatch 'gitee\.com') {
-            scoop config SCOOP_REPO $script:SCOOP_CN_REPO
-            Write-Dim "    Scoop repo -> gitee"
-        }
-        
-        # 确保 main bucket 是有效的 git 仓库且指向 gitee 镜像
-        # 通过 scoop 自身获取 buckets 目录
-        $scoopDir = if ($env:SCOOP) { $env:SCOOP } else { "$env:USERPROFILE\scoop" }
-        $mainBucketPath = Join-Path $scoopDir "buckets\main"
-        
-        $needReaddMain = $false
-        $gitDir = Join-Path $mainBucketPath ".git"
-        if (Test-Path $gitDir) {
-            # 是 git 仓库，检查 remote URL 是否已经指向 gitee
-            $remoteUrl = git -C $mainBucketPath remote get-url origin 2>$null
-            if ($remoteUrl -notmatch 'gitee\.com') {
-                $needReaddMain = $true
-            }
-        } elseif (Test-Path $mainBucketPath) {
-            # 目录存在但不是 git 仓库
-            $needReaddMain = $true
-        } else {
-            # 目录不存在
-            $needReaddMain = $true
-        }
-        if ($needReaddMain) {
-            Write-Dim "    Reinitializing main bucket for China mirror..."
-            try { scoop bucket rm main 2>$null } catch {}
-            if (Test-Path $mainBucketPath) {
-                Remove-Item -Path $mainBucketPath -Recurse -Force -ErrorAction SilentlyContinue
-            }
-            try {
-                scoop bucket add main "https://gitee.com/scoop-installer/Main"
-                Write-Dim "    main bucket -> gitee mirror"
-            } catch {
-                try {
-                    scoop bucket add main "$($script:GH_PROXY)/https://github.com/ScoopInstaller/Main"
-                    Write-Dim "    main bucket -> gh-proxy"
-                } catch {
-                    Write-Warn "Failed to reinitialize main bucket: $_"
-                }
-            }
-        }
-    }
 }
 
+# Git: In China mode without proxy, must be installed before Scoop (needed for bucket mirror switch).
+# In non-China mode (or with proxy), can be installed via Scoop after Scoop is set up.
 function Install-Git {
     Write-Step "Installing Git"
     
@@ -460,29 +503,103 @@ function Install-Git {
         return
     }
     
-    # 临时禁用 aria2，避免 SSL 证书吊销检查失败导致下载出错
-    $aria2WasEnabled = $false
-    if (Test-Command aria2c) {
-        $aria2Status = scoop config aria2-enabled 2>$null
-        if ($aria2Status -match 'True') {
-            $aria2WasEnabled = $true
-            scoop config aria2-enabled false
-            Write-Dim "    aria2 temporarily disabled for Git install"
+    # Try Scoop (only if Scoop is available AND git is not yet present)
+    if (Test-Command scoop) {
+        Write-Dim "    Installing Git via Scoop..."
+        try { scoop install git 2>$null } catch {}
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+        if (Test-Command git) {
+            Write-Info "Git installed via Scoop ($(git --version))"
+            return
+        }
+        Write-Dim "    Scoop install git failed, trying other methods..."
+    }
+    
+    # Try winget (non-China or with proxy; China without proxy downloads from GitHub so skip)
+    $proxy = Get-SystemProxy
+    if ((Test-Command winget) -and (-not $China -or $proxy)) {
+        Write-Dim "    Installing Git via winget..."
+        try {
+            winget install --id Git.Git -e --source winget --silent --accept-package-agreements --accept-source-agreements
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+            $gitPath = "$env:ProgramFiles\Git\cmd"
+            if ((Test-Path $gitPath) -and ($env:PATH -notmatch [regex]::Escape($gitPath))) {
+                $env:PATH = "$gitPath;$env:PATH"
+            }
+            if (Test-Command git) {
+                Write-Info "Git installed via winget ($(git --version))"
+                return
+            }
+        } catch {
+            Write-Warn "winget install failed: $_"
         }
     }
     
-    try {
-        scoop install git
-        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        Write-Info "Git installed"
-    } catch {
-        Write-Fail "Git installation failed: $_"
-    } finally {
-        # 恢复 aria2
-        if ($aria2WasEnabled) {
-            scoop config aria2-enabled true
-            Write-Dim "    aria2 re-enabled"
+    # Fallback: prompt user to install manually
+    Write-Fail "Git is required but could not be installed automatically"
+    Write-Host ""
+    Write-Host "  Please install Git for Windows:" -ForegroundColor Yellow
+    Write-Host "  1. Download: https://git-scm.com/download/win" -ForegroundColor Cyan
+    Write-Host "  2. Run the installer (use default options)" -ForegroundColor Cyan
+    Write-Host "  3. Restart PowerShell" -ForegroundColor Cyan
+    Write-Host "  4. Re-run this script" -ForegroundColor Cyan
+    Write-Host ""
+    throw "Git is required. Install it and re-run this script."
+}
+
+# Configure Scoop main bucket to use China mirror (requires git)
+function Set-ScoopChinaMirror {
+    if (-not $China -or (Get-SystemProxy)) { return }
+    if (-not (Test-Command git)) { return }
+    
+    Write-Step "Configuring Scoop China mirror"
+    
+    # Set Scoop repo
+    $repoOutput = scoop config SCOOP_REPO 2>$null
+    if ($repoOutput -notmatch 'gitee\.com') {
+        scoop config SCOOP_REPO $script:SCOOP_CN_REPO
+        Write-Dim "    Scoop repo -> gitee"
+    }
+    
+    # Switch main bucket to gitee
+    $scoopDir = if ($env:SCOOP) { $env:SCOOP } else { "$env:USERPROFILE\scoop" }
+    $mainBucketPath = Join-Path $scoopDir "buckets\main"
+    $gitDir = Join-Path $mainBucketPath ".git"
+    
+    $needSwitch = $false
+    if (Test-Path $gitDir) {
+        $remoteUrl = git -C $mainBucketPath remote get-url origin 2>$null
+        if ($remoteUrl -notmatch 'gitee\.com') { $needSwitch = $true }
+    } else {
+        $needSwitch = $true
+    }
+    
+    if ($needSwitch) {
+        Write-Dim "    Switching main bucket to gitee mirror..."
+        try { scoop bucket rm main 2>$null } catch {}
+        if (Test-Path $mainBucketPath) {
+            Remove-Item -Path $mainBucketPath -Recurse -Force -ErrorAction SilentlyContinue
         }
+        try {
+            scoop bucket add main $script:SCOOP_CN_MAIN_REPO
+            Write-Info "main bucket -> gitee mirror"
+        } catch {
+            Write-Warn "Failed to switch main bucket to gitee: $_"
+        }
+    } else {
+        Write-Info "main bucket already on gitee mirror"
+    }
+}
+
+function Ensure-ExtrasBucket {
+    $buckets = scoop bucket list 2>$null | Select-Object -ExpandProperty Name -ErrorAction SilentlyContinue
+    if ($buckets -contains 'extras') { return }
+    
+    Write-Step "Adding scoop extras bucket"
+    if ($China -and -not (Get-SystemProxy)) {
+        scoop bucket add extras $script:SCOOP_CN_EXTRAS_REPO
+    } else {
+        scoop bucket add extras
     }
 }
 
@@ -504,11 +621,13 @@ function Install-Aria2 {
     
     scoop config aria2-enabled true
     scoop config aria2-warning-enabled false
-    # 禁用证书吊销检查，避免某些网络环境下 SSL 握手失败
     scoop config aria2-options '--check-certificate=false'
     Write-Info "aria2 enabled"
 }
 
+#===========================================
+# Install Functions - Layer 2: Runtimes
+#===========================================
 function Install-Python {
     Write-Step "Installing Python"
     
@@ -516,38 +635,60 @@ function Install-Python {
     if ($PythonVersion) { $pkg = "python$PythonVersion" }
     
     $pythonInstalled = $false
-    if (Test-Command python) {
+    if (Test-PythonReal) {
         $pyOutput = python --version 2>&1
-        if ($pyOutput -notmatch 'Microsoft Store|was not found') {
-            $pythonInstalled = $true
-            Write-Info "Python already installed ($pyOutput)"
+        $pythonInstalled = $true
+        Write-Info "Python already installed ($pyOutput)"
+    } else {
+        $pycmd = Get-Command python -ErrorAction SilentlyContinue
+        if ($pycmd -and $pycmd.Source -match 'WindowsApps') {
+            Write-Warn "Detected Windows Store stub, installing real Python via Scoop"
         }
     }
     
     if (-not $pythonInstalled) {
         scoop install $pkg
-        if ($LASTEXITCODE -ne 0) {
-            throw "Python installation failed"
-        }
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        Write-Info "Python installed ($(python --version 2>&1))"
+        if (-not (Test-PythonReal)) {
+            Write-Fail "Python installation failed"
+            return
+        }
+        Test-InstallResult -Name "python" | Out-Null
     }
     
-    Write-Step "Configuring pip mirror"
-    $pipDir = "$env:APPDATA\pip"
-    if (-not (Test-Path $pipDir)) { New-Item -ItemType Directory -Path $pipDir -Force | Out-Null }
-    $mirror = $script:PIP_MIRROR
-    if (-not $mirror) { $mirror = "https://pypi.org/simple" }
-    $pipHost = ([uri]$mirror).Host
-    $pipContent = "[global]`nindex-url = $mirror`ntrusted-host = $pipHost"
-    Set-Content -Path "$pipDir\pip.ini" -Value $pipContent
-    Write-Info "pip -> $mirror"
+    # Only configure pip mirror when -China is specified
+    if ($China -and (Test-Command pip)) {
+        Write-Step "Configuring pip mirror"
+        $pipDir = "$env:APPDATA\pip"
+        if (-not (Test-Path $pipDir)) { New-Item -ItemType Directory -Path $pipDir -Force | Out-Null }
+        $mirror = $script:PIP_MIRROR
+        $pipHost = ([uri]$mirror).Host
+        $pipContent = "[global]`nindex-url = $mirror`ntrusted-host = $pipHost"
+        Set-Content -Path "$pipDir\pip.ini" -Value $pipContent
+        Write-Info "pip -> $mirror"
+    }
+    
+    # Install uv (includes uvx)
+    if (Test-Command pip) {
+        if (-not (Test-Command uv)) {
+            Write-Step "Installing uv"
+            pip install uv
+            $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+            if (Test-Command uv) {
+                Write-Info "uv installed ($(uv --version))"
+            } else {
+                Write-Warn "uv installation failed"
+            }
+        } else {
+            Write-Info "uv already installed ($(uv --version))"
+        }
+    }
 }
 
 function Install-NodeJS {
     Write-Step "Installing Node.js"
     
-    $pkg = "nodejs"
+    $pkg = "nodejs-lts"
     if ($NodeJSVersion) { $pkg = "nodejs$NodeJSVersion" }
     
     if (Test-Command node) {
@@ -556,14 +697,33 @@ function Install-NodeJS {
     } else {
         scoop install $pkg
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        Write-Info "Node.js installed ($(node --version))"
+        Test-InstallResult -Name "node" | Out-Null
+        if (-not (Test-Command npx)) {
+            Write-Warn "npx not found, check Node.js installation"
+        }
     }
     
-    Write-Step "Configuring npm mirror"
-    $mirror = $script:NPM_MIRROR
-    if (-not $mirror) { $mirror = "https://registry.npmjs.org" }
-    npm config set registry $mirror
-    Write-Info "npm -> $mirror"
+    # Only configure npm mirror when -China is specified
+    if ($China -and (Test-Command npm)) {
+        Write-Step "Configuring npm mirror"
+        npm config set registry $script:NPM_MIRROR
+        Write-Info "npm -> $($script:NPM_MIRROR)"
+    }
+    
+    # Install pnpm globally
+    if (Test-Command npm) {
+        if (-not (Test-Command pnpm)) {
+            Write-Step "Installing pnpm"
+            npm install -g pnpm
+            if (Test-Command pnpm) {
+                Write-Info "pnpm installed ($(pnpm --version))"
+            } else {
+                Write-Warn "pnpm installation failed"
+            }
+        } else {
+            Write-Info "pnpm already installed ($(pnpm --version))"
+        }
+    }
 }
 
 function Install-Go {
@@ -578,7 +738,21 @@ function Install-Go {
     } else {
         scoop install $pkg
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-        Write-Info "Go installed ($(go version))"
+        Test-InstallResult -Name "go" -VersionCmd "go version" | Out-Null
+    }
+    
+    # Ensure GOPATH\bin is in PATH
+    if (Test-Command go) {
+        $gopath = go env GOPATH 2>$null
+        if ($gopath) {
+            $gopathBin = Join-Path $gopath "bin"
+            $currentPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+            if ($currentPath -notmatch [regex]::Escape($gopathBin)) {
+                [System.Environment]::SetEnvironmentVariable("PATH", "$currentPath;$gopathBin", "User")
+                $env:PATH = "$env:PATH;$gopathBin"
+                Write-Info "Added $gopathBin to PATH"
+            }
+        }
     }
     
     $proxy = $script:GO_PROXY
@@ -600,15 +774,13 @@ function Install-CMake {
     
     scoop install cmake
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-    Write-Info "CMake installed ($(cmake --version | Select-Object -First 1))"
+    Test-InstallResult -Name "cmake" -VersionCmd "cmake --version | Select-Object -First 1" | Out-Null
 }
 
 function Test-VCToolsInstalled {
-    # 检查 Visual Studio Build Tools / C++ 工作负载是否已安装
     $pf86 = [Environment]::GetFolderPath('ProgramFilesX86')
     $pf = [Environment]::GetFolderPath('ProgramFiles')
     
-    # 方法1: 通过 vswhere 查找
     $vswherePath = Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (Test-Path $vswherePath) {
         $result = $null
@@ -617,7 +789,6 @@ function Test-VCToolsInstalled {
         } catch {}
         if ($result) { return $true }
     }
-    # 方法2: 检查常见路径
     $path1 = Join-Path $pf 'Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC'
     $path2 = Join-Path $pf 'Microsoft Visual Studio\2022\Community\VC\Tools\MSVC'
     $path3 = Join-Path $pf86 'Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC'
@@ -635,7 +806,6 @@ function Install-VCTools {
         return
     }
     
-    # 需要管理员权限
     if (-not $script:IsAdmin) {
         Write-Warn "Installing VS Build Tools requires Administrator privileges"
         Write-Host ""
@@ -647,7 +817,7 @@ function Install-VCTools {
     
     $installed = $false
     
-    # 方案1: Chocolatey
+    # Method 1: Chocolatey
     if (-not $installed -and (Test-Command choco)) {
         Write-Step "Trying Chocolatey..."
         try {
@@ -661,7 +831,7 @@ function Install-VCTools {
         }
     }
     
-    # 方案2: winget
+    # Method 2: winget
     if (-not $installed -and (Test-Command winget)) {
         Write-Step "Trying winget..."
         try {
@@ -675,7 +845,7 @@ function Install-VCTools {
         }
     }
     
-    # 方案3: 直接下载 VS Build Tools installer
+    # Method 3: Direct download
     if (-not $installed) {
         Write-Step "Downloading VS Build Tools installer..."
         $installerPath = "$env:TEMP\vs_BuildTools.exe"
@@ -696,7 +866,6 @@ function Install-VCTools {
         }
     }
     
-    # 全部失败，引导手动安装
     if (-not $installed) {
         Write-Fail "All automatic installation methods failed"
         Write-Host ""
@@ -730,18 +899,23 @@ function Install-Rust {
         
         $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
         
-        Write-Info "Rust installed ($(rustc --version))"
+        Test-InstallResult -Name "rustc" | Out-Null
     }
     
     if ($mirror) {
         Write-Step "Configuring Rust mirror"
-        $cargoConfig = "$env:USERPROFILE\.cargo\config"
+        $cargoConfig = "$env:USERPROFILE\.cargo\config.toml"
+        $cargoDir = "$env:USERPROFILE\.cargo"
+        if (-not (Test-Path $cargoDir)) { New-Item -ItemType Directory -Path $cargoDir -Force | Out-Null }
         $cargoContent = "[source.crates-io]`nreplace-with = 'rsproxy'`n`n[source.rsproxy]`nregistry = `"$mirror/crates.io-index`""
         Set-Content -Path $cargoConfig -Value $cargoContent
         Write-Info "Cargo -> $mirror"
     }
 }
 
+#===========================================
+# Install Functions - Layer 3: Dev Tools
+#===========================================
 function Install-Kiro {
     Write-Step "Installing Kiro"
     
@@ -751,12 +925,14 @@ function Install-Kiro {
         return
     }
     
-    # Kiro 目前不在 scoop 中，提示手动下载
-    Write-Warn "Kiro is not available in Scoop"
-    Write-Host ""
-    Write-Host "  Please download Kiro manually from:" -ForegroundColor Yellow
-    Write-Host "  https://kiro.dev/download" -ForegroundColor Cyan
-    Write-Host ""
+    if (Test-Command kiro) {
+        Write-Info "Kiro already installed (scoop)"
+        return
+    }
+    
+    Ensure-ExtrasBucket
+    scoop install extras/kiro
+    Write-Info "Kiro installed"
 }
 
 function Install-Cursor {
@@ -773,13 +949,7 @@ function Install-Cursor {
         return
     }
     
-    # 添加 extras bucket
-    $buckets = scoop bucket list 2>$null
-    if ($buckets -notmatch 'extras') {
-        Write-Step "Adding scoop extras bucket"
-        scoop bucket add extras
-    }
-    
+    Ensure-ExtrasBucket
     scoop install extras/cursor
     Write-Info "Cursor installed"
 }
@@ -798,13 +968,7 @@ function Install-VSCode {
         return
     }
     
-    # 添加 extras bucket
-    $buckets = scoop bucket list 2>$null
-    if ($buckets -notmatch 'extras') {
-        Write-Step "Adding scoop extras bucket"
-        scoop bucket add extras
-    }
-    
+    Ensure-ExtrasBucket
     scoop install extras/vscode
     Write-Info "VS Code installed"
 }
@@ -821,14 +985,14 @@ function Invoke-Install {
     }
     
     if ($VibeCoding) {
-        $script:Python = $true
-        $script:NodeJS = $true
-        # CMake 和 VCTools 安装耗时较长，不再默认包含，需要时用 -CMake / -VCTools 单独安装
+        $Python = $true
+        $NodeJS = $true
     }
     
     Write-Header "install - Setup [$region]"
     Write-Dim "  PowerShell $($PSVersionTable.PSVersion) | $(Get-AdminStatus) | $env:PROCESSOR_ARCHITECTURE"
     
+    # Proxy detection
     $proxy = Get-SystemProxy
     if ($proxy) {
         Write-Info "Proxy detected: $($proxy.Value) ($($proxy.Source))"
@@ -837,8 +1001,46 @@ function Invoke-Install {
         }
     }
     
-    Install-Scoop
-    Install-Git
+    # Network check (no proxy and no -China)
+    if (-not $China -and -not $proxy) {
+        Test-Network
+    }
+    
+    # ── Layer 1: Base Infrastructure (failure stops script) ──
+    if ($China -and -not $proxy) {
+        # China mode: Git first (winget/manual) → Scoop → mirror switch
+        try {
+            Install-Git
+        } catch {
+            Write-Fail "Git installation failed, cannot continue: $_"
+            return
+        }
+        
+        try {
+            Install-Scoop
+        } catch {
+            Write-Fail "Scoop installation failed, cannot continue: $_"
+            return
+        }
+        
+        Set-ScoopChinaMirror
+    } else {
+        # Non-China mode (or with proxy): Scoop first → Git via Scoop/winget
+        try {
+            Install-Scoop
+        } catch {
+            Write-Fail "Scoop installation failed, cannot continue: $_"
+            return
+        }
+        
+        try {
+            Install-Git
+        } catch {
+            Write-Fail "Git installation failed, cannot continue: $_"
+            return
+        }
+    }
+    
     if (-not $NoAria2) { Install-Aria2 }
     
     if ($ScoopOnly) {
@@ -848,33 +1050,56 @@ function Invoke-Install {
         return
     }
     
-    if ($Python -or $PythonVersion) { Install-Python }
-    if ($NodeJS -or $NodeJSVersion) { Install-NodeJS }
-    if ($VCTools) { Install-VCTools }
-    if ($CMake) { Install-CMake }
-    if ($Go -or $GoVersion) { Install-Go }
-    if ($Rust) { Install-Rust }
-    if ($Kiro) { Install-Kiro }
-    if ($Cursor) { Install-Cursor }
-    if ($VSCode) { Install-VSCode }
+    # ── Layer 2: Runtimes (failure warns and continues) ──
+    if ($Python -or $PythonVersion) {
+        try { Install-Python } catch { Write-Warn "Python installation incomplete: $_" }
+    }
+    if ($NodeJS -or $NodeJSVersion) {
+        try { Install-NodeJS } catch { Write-Warn "Node.js installation incomplete: $_" }
+    }
+    if ($VCTools) {
+        try { Install-VCTools } catch { Write-Warn "VC Tools installation incomplete: $_" }
+    }
+    if ($CMake) {
+        try { Install-CMake } catch { Write-Warn "CMake installation incomplete: $_" }
+    }
+    if ($Go -or $GoVersion) {
+        try { Install-Go } catch { Write-Warn "Go installation incomplete: $_" }
+    }
+    if ($Rust) {
+        try { Install-Rust } catch { Write-Warn "Rust installation incomplete: $_" }
+    }
     
+    # ── Layer 3: Dev Tools (failure warns and continues) ──
+    if ($Kiro) {
+        try { Install-Kiro } catch { Write-Warn "Kiro installation incomplete: $_" }
+    }
+    if ($Cursor) {
+        try { Install-Cursor } catch { Write-Warn "Cursor installation incomplete: $_" }
+    }
+    if ($VSCode) {
+        try { Install-VSCode } catch { Write-Warn "VS Code installation incomplete: $_" }
+    }
+    
+    # Summary
     Write-Host ""
     Write-Host "----------------------------------------"
     Write-Host "Installation Complete" -ForegroundColor Green
     Write-Host ""
     if (Test-Command scoop) { Write-Host "  Scoop     installed" }
-    if ($Python -and (Test-Command python)) { Write-Host "  Python    $((python --version 2>&1) -replace 'Python ', '')" }
-    if ($NodeJS -and (Test-Command node)) { Write-Host "  Node.js   $(node --version)" }
+    if (($Python -or $PythonVersion) -and (Test-PythonReal)) { Write-Host "  Python    $((python --version 2>&1) -replace 'Python ', '')" }
+    if (($NodeJS -or $NodeJSVersion) -and (Test-Command node)) { Write-Host "  Node.js   $(node --version)" }
     if ($CMake -and (Test-Command cmake)) { Write-Host "  CMake     $((cmake --version | Select-Object -First 1) -replace 'cmake version ', '')" }
     if ($VCTools -and (Test-VCToolsInstalled)) { Write-Host "  VC Tools  installed" }
-    if ($Go -and (Test-Command go)) { Write-Host "  Go        $((go version) -replace 'go version go', '' -replace ' .*', '')" }
+    if (($Go -or $GoVersion) -and (Test-Command go)) { Write-Host "  Go        $((go version) -replace 'go version go', '' -replace ' .*', '')" }
     if ($Rust -and (Test-Command rustc)) { Write-Host "  Rust      $((rustc --version) -replace 'rustc ', '' -replace ' .*', '')" }
-    if ($Cursor -and (Test-Command cursor)) { Write-Host "  Cursor    installed" }
-    if ($VSCode -and (Test-Command code)) { Write-Host "  VS Code   installed" }
+    if ($Kiro) { $kp = "$env:LOCALAPPDATA\Programs\Kiro\Kiro.exe"; if (Test-Path $kp) { Write-Host "  Kiro      installed" } }
+    if ($Cursor -and ((Test-Path "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe") -or (Test-Command cursor))) { Write-Host "  Cursor    installed" }
+    if ($VSCode -and ((Test-Path "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe") -or (Test-Command code))) { Write-Host "  VS Code   installed" }
     Write-Host ""
     Write-Warn "Restart PowerShell to take effect"
     
-    # 如果没有安装 CMake / VCTools，合并提示建议安装
+    # Tips for optional tools
     $tips = @()
     if (-not $CMake -and -not (Test-Command cmake)) {
         $tips += "CMake (-CMake)"
