@@ -596,7 +596,7 @@ function Ensure-ExtrasBucket {
     $buckets = scoop bucket list 2>$null | Select-Object -ExpandProperty Name -ErrorAction SilentlyContinue
     if ($buckets -contains 'extras') { return }
     
-    Write-Step "Adding scoop extras bucket"
+    Write-Step "Adding scoop extras bucket (this may take a while)"
     if ($China -and -not (Get-SystemProxy)) {
         scoop bucket add extras $script:SCOOP_CN_EXTRAS_REPO
     } else {
@@ -897,9 +897,15 @@ function Install-Rust {
         $rustupInit = "$env:TEMP\rustup-init.exe"
         Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile $rustupInit
         & $rustupInit -y --default-toolchain stable
-        Remove-Item $rustupInit -Force
+        Remove-Item $rustupInit -Force -ErrorAction SilentlyContinue
         
-        $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+        # Refresh PATH from registry
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+        # Also ensure long-path cargo bin is in PATH
+        $cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
+        if ((Test-Path $cargoBin) -and ($env:PATH -notmatch [regex]::Escape($cargoBin))) {
+            $env:PATH = "$cargoBin;$env:PATH"
+        }
         
         Test-InstallResult -Name "rustc" | Out-Null
     }
