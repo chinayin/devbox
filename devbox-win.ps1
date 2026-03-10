@@ -591,6 +591,23 @@ function Set-ScoopChinaMirror {
     }
 }
 
+function Set-ScoopProxy {
+    param([switch]$Enable, [switch]$Disable)
+    if ($Enable) {
+        $proxy = Get-SystemProxy
+        if ($proxy) {
+            scoop config proxy $proxy.Value 2>$null
+            Write-Info "Scoop proxy -> $($proxy.Value) (session only)"
+            return $true
+        }
+    }
+    if ($Disable) {
+        scoop config rm proxy 2>$null | Out-Null
+        Write-Dim "    Scoop session proxy removed"
+    }
+    return $false
+}
+
 function Ensure-ExtrasBucket {
     $buckets = scoop bucket list 2>$null | Select-Object -ExpandProperty Name -ErrorAction SilentlyContinue
     if ($buckets -contains 'extras') { return }
@@ -994,11 +1011,13 @@ function Invoke-Install {
     
     # Proxy detection
     $proxy = Get-SystemProxy
+    $scoopProxySet = $false
     if ($proxy) {
         Write-Info "Proxy detected: $($proxy.Value) ($($proxy.Source))"
         if ($China) {
             Write-Warn "Proxy detected, -China mirror may not be needed"
         }
+        $scoopProxySet = Set-ScoopProxy -Enable
     }
     
     # Network check (no proxy and no -China)
@@ -1047,6 +1066,7 @@ function Invoke-Install {
         Write-Host ""
         Write-Info "Scoop installed (-ScoopOnly)"
         Write-Warn "Restart PowerShell to take effect"
+        if ($scoopProxySet) { Set-ScoopProxy -Disable }
         return
     }
     
@@ -1116,6 +1136,11 @@ function Invoke-Install {
         }
         Write-Host "  Run: " -NoNewline
         Write-Host ".\devbox-win.ps1 install -CMake -VCTools" -ForegroundColor Cyan
+    }
+    
+    # Clean up session-only Scoop proxy
+    if ($scoopProxySet) {
+        Set-ScoopProxy -Disable
     }
 }
 
