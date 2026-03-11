@@ -712,19 +712,24 @@ function Install-NodeJS {
         Write-Info "npm -> $mirror"
     }
     
-    # Install pnpm globally
-    if (Test-Command npm) {
-        if (-not (Test-Command pnpm)) {
-            Write-Step "Installing pnpm"
-            npm install -g pnpm
-            if (Test-Command pnpm) {
-                Write-Info "pnpm installed ($(pnpm --version))"
-            } else {
-                Write-Warn "pnpm installation failed"
-            }
-        } else {
-            Write-Info "pnpm already installed ($(pnpm --version))"
+    # Enable pnpm via corepack
+    # Node.js <=24: corepack is bundled; Node.js 25+: need to install corepack first
+    if (-not (Test-Command pnpm)) {
+        Write-Step "Enabling pnpm"
+        if (-not (Test-Command corepack)) {
+            Write-Dim "    Installing corepack..."
+            npm install -g corepack
         }
+        if (Test-Command corepack) {
+            corepack enable pnpm
+        }
+        if (Test-Command pnpm) {
+            Write-Info "pnpm enabled ($(pnpm --version))"
+        } else {
+            Write-Warn "pnpm enable failed"
+        }
+    } else {
+        Write-Info "pnpm already available ($(pnpm --version))"
     }
 }
 

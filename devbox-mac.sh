@@ -550,15 +550,18 @@ install_nodejs() {
         info "npm → $NPM_MIRROR"
     fi
 
-    # 全局安装 pnpm
-    if has npm; then
-        if ! has pnpm; then
-            step "安装 pnpm"
-            npm install -g pnpm || { warn "pnpm 安装失败"; return 0; }
-            verify_install "pnpm" "pnpm --version"
-        else
-            info "pnpm 已安装 ($(pnpm --version))"
+    # 启用 pnpm (corepack)
+    # Node.js <=24: corepack 内置; Node.js 25+: 需先 npm install -g corepack
+    if ! has pnpm; then
+        step "启用 pnpm"
+        if ! has corepack; then
+            dim "    安装 corepack..."
+            npm install -g corepack || { warn "corepack 安装失败"; return 0; }
         fi
+        corepack enable pnpm || { warn "pnpm 启用失败"; return 0; }
+        verify_install "pnpm" "pnpm --version"
+    else
+        info "pnpm 已安装 ($(pnpm --version))"
     fi
 }
 
