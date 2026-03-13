@@ -721,6 +721,11 @@ function Install-NodeJS {
             npm install -g corepack
         }
         if (Test-Command corepack) {
+            # China: use npm mirror for corepack download
+            if ($China) {
+                $env:COREPACK_NPM_REGISTRY = $script:CN_NPM_MIRROR
+            }
+            $env:COREPACK_ENABLE_AUTO_PIN = "0"
             corepack enable pnpm
         }
         if (Test-Command pnpm) {

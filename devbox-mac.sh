@@ -558,7 +558,11 @@ install_nodejs() {
             dim "    安装 corepack..."
             npm install -g corepack || { warn "corepack 安装失败"; return 0; }
         fi
-        corepack enable pnpm || { warn "pnpm 启用失败"; return 0; }
+        # China: 使用 npm 镜像源下载 pnpm
+        if $USE_CHINA_MIRROR; then
+            export COREPACK_NPM_REGISTRY="$CN_NPM_MIRROR"
+        fi
+        COREPACK_ENABLE_AUTO_PIN=0 corepack enable pnpm || { warn "pnpm 启用失败"; return 0; }
         verify_install "pnpm" "pnpm --version"
     else
         info "pnpm 已安装 ($(pnpm --version))"
