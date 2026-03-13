@@ -722,7 +722,7 @@
             if (currentOs === 'mac') {
                 commandEl.textContent = `/bin/bash -c "$(curl -fsSL ${baseUrl}/devbox-mac.sh)" -- install ${flagStr}`;
             } else {
-                commandEl.textContent = `irm ${baseUrl}/devbox-win.ps1 -OutFile devbox-win.ps1; .\\devbox-win.ps1 install ${flagStr}`;
+                commandEl.textContent = `Set-ExecutionPolicy Bypass -Scope Process; irm ${baseUrl}/devbox-win.ps1 -OutFile devbox-win.ps1; .\\devbox-win.ps1 install ${flagStr}`;
             }
         }
 

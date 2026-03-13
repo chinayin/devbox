@@ -216,16 +216,24 @@
 
         <div class="faq-item">
             <div class="faq-question">
-                提示脚本无法运行？
+                提示 "cannot be loaded because running scripts is disabled on this system"？
                 <svg viewBox="0 0 24 24">
                     <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
                 </svg>
             </div>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Windows 默认禁止运行脚本。打开 PowerShell，执行以下命令允许运行：
+                    这是 Windows PowerShell 的执行策略（Execution Policy）限制，默认禁止运行未签名的 <code>.ps1</code> 脚本。
+                    <br><br>
+                    方法一：临时允许当前窗口运行脚本（推荐，关闭窗口后自动恢复）：
+                    <pre>Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process</pre>
+                    然后重新运行安装命令即可。
+                    <br><br>
+                    方法二：一行命令直接绕过执行：
+                    <pre>powershell -ExecutionPolicy Bypass -File .\devbox-win.ps1 install -Coding -VSCode</pre>
+                    方法三：为当前用户永久允许运行远程签名脚本：
                     <pre>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser</pre>
-                    然后重新运行安装命令。
+                    以上方法均不会影响系统安全策略。
                 </div>
             </div>
         </div>
