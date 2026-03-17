@@ -485,11 +485,11 @@ install_homebrew() {
         # 中国镜像: 从阿里云下载安装脚本
         export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
-        git clone https://mirrors.aliyun.com/homebrew/install.git /tmp/brew-install
-        /bin/bash /tmp/brew-install/install.sh
+        git clone --progress https://mirrors.aliyun.com/homebrew/install.git /tmp/brew-install
+        NONINTERACTIVE=1 /bin/bash /tmp/brew-install/install.sh
         rm -rf /tmp/brew-install
     else
-        /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
+        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
     fi
 
     # Apple Silicon / Intel PATH 配置
