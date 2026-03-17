@@ -108,7 +108,7 @@ irm https://raw.githubusercontent.com/chinayin/devbox/master/devbox-win.ps1 -Out
 
 | 工具 | macOS 镜像 | Windows 镜像 |
 |------|-----------|--------------|
-| 包管理器 | 清华大学 TUNA | Gitee |
+| 包管理器 | 阿里云 | 官方源 |
 | pip (Python) | 清华大学 PyPI | 清华大学 PyPI |
 | npm (Node.js) | 淘宝 npmmirror | 淘宝 npmmirror |
 | Go modules | goproxy.cn | goproxy.cn |

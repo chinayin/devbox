@@ -5,7 +5,7 @@
 # 协议: MIT
 #
 
-VERSION="v1.1"
+VERSION="v1.2"
 PROJECT_URL="https://github.com/chinayin/devbox"
 
 #===========================================
@@ -19,9 +19,9 @@ GO_PROXY=""
 RUST_MIRROR=""
 
 # 中国镜像源
-CN_BREW_MIRROR="https://mirrors.tuna.tsinghua.edu.cn"
-CN_BREW_BOTTLE="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
-CN_BREW_INSTALL_SCRIPT="https://mirrors.ustc.edu.cn/misc/brew-install.sh"
+CN_BREW_MIRROR="https://mirrors.aliyun.com/homebrew"
+CN_BREW_BOTTLE="https://mirrors.aliyun.com/homebrew/homebrew-bottles"
+CN_BREW_INSTALL_SCRIPT="https://mirrors.aliyun.com/homebrew/install/raw/master/install.sh"
 CN_PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 CN_NPM_MIRROR="https://registry.npmmirror.com"
 CN_GO_PROXY="https://goproxy.cn,direct"
@@ -169,7 +169,8 @@ setup_china_mirror() {
     RUST_MIRROR="$CN_RUST_MIRROR"
 
     # 立即设置 Homebrew 环境变量（当前 session 生效，安装 brew 前必须 export）
-    export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/brew.git"
+    export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/brew.git"
+    export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/homebrew-core.git"
     export HOMEBREW_API_DOMAIN="${BREW_BOTTLE_MIRROR}/api"
     export HOMEBREW_BOTTLE_DOMAIN="${BREW_BOTTLE_MIRROR}"
 }
@@ -181,10 +182,11 @@ save_mirrors() {
     step "持久化镜像配置"
     local rc=$(get_shell_rc)
 
-    # Homebrew 镜像（三组变量统一持久化）
+    # Homebrew 镜像（统一持久化）
     local brew_config="
 # Homebrew 镜像 (devbox)
-export HOMEBREW_BREW_GIT_REMOTE=\"${BREW_MIRROR}/git/homebrew/brew.git\"
+export HOMEBREW_BREW_GIT_REMOTE=\"${BREW_MIRROR}/brew.git\"
+export HOMEBREW_CORE_GIT_REMOTE=\"${BREW_MIRROR}/homebrew-core.git\"
 export HOMEBREW_API_DOMAIN=\"${BREW_BOTTLE_MIRROR}/api\"
 export HOMEBREW_BOTTLE_DOMAIN=\"${BREW_BOTTLE_MIRROR}\""
 
@@ -463,17 +465,29 @@ install_xcode_clt() {
 install_homebrew() {
     step "安装 Homebrew"
 
+    # 检测 brew 是否已安装（PATH 中或已知路径）
+    local brew_bin=""
     if has brew; then
-        local brew_ver=$(brew --version 2>/dev/null | head -1 || echo "unknown")
-        info "Homebrew 已安装 (${brew_ver})"
+        brew_bin=$(which brew)
+    elif [[ -x "/opt/homebrew/bin/brew" ]]; then
+        brew_bin="/opt/homebrew/bin/brew"
+    elif [[ -x "/usr/local/bin/brew" ]]; then
+        brew_bin="/usr/local/bin/brew"
+    fi
+    
+    if [[ -n "$brew_bin" ]]; then
+        eval "$($brew_bin shellenv)"
+        info "Homebrew 已安装 ($(brew --version 2>/dev/null | head -1))"
         return 0
     fi
 
     if [[ -n "$BREW_MIRROR" ]]; then
-        # 中国镜像: 用中科大一行式脚本（不依赖 git）
-        export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/git/homebrew/homebrew-core.git"
+        # 中国镜像: 从阿里云下载安装脚本
+        export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
-        /bin/bash -c "$(curl -fsSL ${CN_BREW_INSTALL_SCRIPT})"
+        git clone https://mirrors.aliyun.com/homebrew/install.git /tmp/brew-install
+        /bin/bash /tmp/brew-install/install.sh
+        rm -rf /tmp/brew-install
     else
         /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
     fi
@@ -518,14 +532,12 @@ install_python() {
     fi
 
     # 安装 uv (包含 uvx)
-    if has pip3; then
-        if ! has uv; then
-            step "安装 uv"
-            pip3 install uv || { warn "uv 安装失败"; return 0; }
-            verify_install "uv" "uv --version"
-        else
-            info "uv 已安装 ($(uv --version 2>&1 | head -1))"
-        fi
+    if ! has uv; then
+        step "安装 uv"
+        brew install uv || { warn "uv 安装失败"; return 0; }
+        verify_install "uv" "uv --version"
+    else
+        info "uv 已安装 ($(uv --version 2>&1 | head -1))"
     fi
 }
 
