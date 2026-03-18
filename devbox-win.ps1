@@ -51,7 +51,7 @@ $script:IsAdmin = Test-IsAdmin
 #===========================================
 # Configuration
 #===========================================
-$script:VERSION = "v1.1"
+$script:VERSION = "v1.3"
 $script:PROJECT_URL = "https://github.com/chinayin/devbox"
 
 # Scoop install URLs
