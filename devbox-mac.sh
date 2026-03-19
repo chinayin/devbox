@@ -486,11 +486,11 @@ install_homebrew() {
         export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
         git clone --progress https://mirrors.aliyun.com/homebrew/install.git /tmp/brew-install
-        NONINTERACTIVE=1 /bin/bash /tmp/brew-install/install.sh
+        /bin/bash /tmp/brew-install/install.sh
         local install_result=$?
         rm -rf /tmp/brew-install
     else
-        NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
+        /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
         local install_result=$?
     fi
 
