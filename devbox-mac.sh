@@ -5,7 +5,7 @@
 # 协议: MIT
 #
 
-VERSION="v1.3"
+VERSION="v1.4"
 PROJECT_URL="https://github.com/chinayin/devbox"
 
 #===========================================
@@ -487,20 +487,37 @@ install_homebrew() {
         export HOMEBREW_INSTALL_FROM_API=1
         git clone --progress https://mirrors.aliyun.com/homebrew/install.git /tmp/brew-install
         NONINTERACTIVE=1 /bin/bash /tmp/brew-install/install.sh
+        local install_result=$?
         rm -rf /tmp/brew-install
     else
         NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
+        local install_result=$?
+    fi
+
+    if [[ $install_result -ne 0 ]]; then
+        fail "Homebrew 安装失败"
+        if ! $SUDO_OK; then
+            warn "当前用户无 sudo 权限，请使用管理员账户运行"
+        fi
+        return 1
     fi
 
     # Apple Silicon / Intel PATH 配置
     local rc=$(get_shell_rc)
-    if [[ $(uname -m) == "arm64" ]]; then
-        append_if_missing "$rc" 'eval "$(/opt/homebrew/bin/brew shellenv)"' "/opt/homebrew"
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-    else
-        append_if_missing "$rc" 'eval "$(/usr/local/bin/brew shellenv)"' "/usr/local"
-        eval "$(/usr/local/bin/brew shellenv)"
+    local brew_path=""
+    if [[ -x "/opt/homebrew/bin/brew" ]]; then
+        brew_path="/opt/homebrew/bin/brew"
+    elif [[ -x "/usr/local/bin/brew" ]]; then
+        brew_path="/usr/local/bin/brew"
     fi
+    
+    if [[ -z "$brew_path" ]]; then
+        fail "Homebrew 安装后未找到"
+        return 1
+    fi
+    
+    append_if_missing "$rc" "eval \"\$($brew_path shellenv)\"" "$(dirname $(dirname $brew_path))"
+    eval "$($brew_path shellenv)"
 
     verify_install "brew" "brew --version | head -1"
 }
