@@ -5,7 +5,7 @@
 # 协议: MIT
 #
 
-VERSION="v1.4"
+VERSION="v1.4.1"
 PROJECT_URL="https://github.com/chinayin/devbox"
 
 #===========================================
