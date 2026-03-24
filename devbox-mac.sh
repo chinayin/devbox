@@ -5,7 +5,7 @@
 # 协议: MIT
 #
 
-VERSION="v1.4.1"
+VERSION="v1.4.2"
 PROJECT_URL="https://github.com/chinayin/devbox"
 
 #===========================================
@@ -18,10 +18,11 @@ NPM_MIRROR=""
 GO_PROXY=""
 RUST_MIRROR=""
 
-# 中国镜像源
+# 中国镜像源（阿里云）
 CN_BREW_MIRROR="https://mirrors.aliyun.com/homebrew"
 CN_BREW_BOTTLE="https://mirrors.aliyun.com/homebrew/homebrew-bottles"
-CN_BREW_INSTALL_SCRIPT="https://mirrors.aliyun.com/homebrew/install/raw/master/install.sh"
+CN_BREW_API="https://mirrors.aliyun.com/homebrew-bottles/api"
+CN_BREW_INSTALL_REPO="https://mirrors.aliyun.com/homebrew/install.git"
 CN_PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
 CN_NPM_MIRROR="https://registry.npmmirror.com"
 CN_GO_PROXY="https://goproxy.cn,direct"
@@ -163,6 +164,7 @@ verify_install() {
 setup_china_mirror() {
     BREW_MIRROR="$CN_BREW_MIRROR"
     BREW_BOTTLE_MIRROR="$CN_BREW_BOTTLE"
+    BREW_API_MIRROR="$CN_BREW_API"
     PIP_MIRROR="$CN_PIP_MIRROR"
     NPM_MIRROR="$CN_NPM_MIRROR"
     GO_PROXY="$CN_GO_PROXY"
@@ -171,7 +173,7 @@ setup_china_mirror() {
     # 立即设置 Homebrew 环境变量（当前 session 生效，安装 brew 前必须 export）
     export HOMEBREW_BREW_GIT_REMOTE="${BREW_MIRROR}/brew.git"
     export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/homebrew-core.git"
-    export HOMEBREW_API_DOMAIN="${BREW_BOTTLE_MIRROR}/api"
+    export HOMEBREW_API_DOMAIN="${BREW_API_MIRROR}"
     export HOMEBREW_BOTTLE_DOMAIN="${BREW_BOTTLE_MIRROR}"
 }
 
@@ -187,7 +189,7 @@ save_mirrors() {
 # Homebrew 镜像 (devbox)
 export HOMEBREW_BREW_GIT_REMOTE=\"${BREW_MIRROR}/brew.git\"
 export HOMEBREW_CORE_GIT_REMOTE=\"${BREW_MIRROR}/homebrew-core.git\"
-export HOMEBREW_API_DOMAIN=\"${BREW_BOTTLE_MIRROR}/api\"
+export HOMEBREW_API_DOMAIN=\"${BREW_API_MIRROR}\"
 export HOMEBREW_BOTTLE_DOMAIN=\"${BREW_BOTTLE_MIRROR}\""
 
     append_if_missing "$rc" "$brew_config" "HOMEBREW_BOTTLE_DOMAIN"
@@ -482,25 +484,27 @@ install_homebrew() {
     fi
 
     if [[ -n "$BREW_MIRROR" ]]; then
-        # 中国镜像: 从阿里云下载安装脚本
+        # 中国镜像: 下载安装脚本
         export HOMEBREW_CORE_GIT_REMOTE="${BREW_MIRROR}/homebrew-core.git"
         export HOMEBREW_INSTALL_FROM_API=1
-        git clone --progress https://mirrors.aliyun.com/homebrew/install.git /tmp/brew-install
-        /bin/bash /tmp/brew-install/install.sh
-        local install_result=$?
         rm -rf /tmp/brew-install
+
+        # 尝试 1: git clone install 仓库
+        if git clone --depth=1 "$CN_BREW_INSTALL_REPO" /tmp/brew-install; then
+            info "安装脚本下载成功"
+            /bin/bash /tmp/brew-install/install.sh
+            rm -rf /tmp/brew-install
+        else
+            warn "镜像不可用，回退到官方源..."
+            # 尝试 2: 回退到官方安装脚本
+            /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
+        fi
     else
         /bin/bash -c "$(curl -fsSL ${OFFICIAL_BREW_URL})"
-        local install_result=$?
     fi
 
-    if [[ $install_result -ne 0 ]]; then
-        fail "Homebrew 安装失败"
-        if ! $SUDO_OK; then
-            warn "当前用户无 sudo 权限，请使用管理员账户运行"
-        fi
-        return 1
-    fi
+    # 安装脚本可能因 brew update 失败返回非零，但 brew 本身已装好
+    # 所以不检查 install_result，而是直接检查 brew 二进制是否存在
 
     # Apple Silicon / Intel PATH 配置
     local rc=$(get_shell_rc)
@@ -512,12 +516,21 @@ install_homebrew() {
     fi
     
     if [[ -z "$brew_path" ]]; then
-        fail "Homebrew 安装后未找到"
+        fail "Homebrew 安装失败"
+        if ! $SUDO_OK; then
+            warn "当前用户无 sudo 权限，请使用管理员账户运行"
+        fi
         return 1
     fi
     
     append_if_missing "$rc" "eval \"\$($brew_path shellenv)\"" "$(dirname $(dirname $brew_path))"
     eval "$($brew_path shellenv)"
+
+    # brew update 可能因 portable-ruby 下载失败而未完成，尝试单独重试
+    if ! brew --version &>/dev/null; then
+        warn "brew update 未完成，尝试重试..."
+        brew update --force 2>/dev/null || warn "brew update 失败，但 brew 已安装，后续可手动 brew update"
+    fi
 
     verify_install "brew" "brew --version | head -1"
 }
